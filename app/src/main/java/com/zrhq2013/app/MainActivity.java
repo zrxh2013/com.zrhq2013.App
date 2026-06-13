@@ -19,7 +19,7 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private ProgressBar progressBar;
-    private static final String APP_URL = "https://your-app-url.com";
+    private static final String APP_URL = "https://www.lingguang.com/share/CHAT-27eb3584-c60f-40ff-a042-ba5a820de81550?sharemedium=others";
     private static final int FILE_CHOOSER_RESULT_CODE = 1;
     private ValueCallback<Uri[]> filePathCallback;
 
