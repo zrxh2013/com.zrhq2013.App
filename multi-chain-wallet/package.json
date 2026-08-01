@@ -1,0 +1,31 @@
+{
+  "name": "multi-chain-wallet",
+  "version": "1.0.0",
+  "description": "多链加密货币命令行钱包",
+  "main": "index.js",
+  "bin": {
+    "wallet": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "wallet": "node index.js"
+  },
+  "keywords": [
+    "blockchain",
+    "wallet",
+    "ethereum",
+    "crypto",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "bip39": "^3.1.0",
+    "chalk": "^4.1.2",
+    "commander": "^9.5.0",
+    "crypto-js": "^4.2.0",
+    "ethers": "^5.8.0",
+    "inquirer": "^8.2.7"
+  }
+}
