@@ -23,6 +23,10 @@ module.exports = {
         // '--pk', '你的私钥',
         // ===== 实时模式（推荐）=====
         '--ws',
+        // ===== 到账通知（蜂鸣+桌面通知）=====
+        '--notify',
+        // ===== SQLite 数据库记录所有到账交易 =====
+        '--db', process.env.DB_PATH || './data/transactions.db',
         // ===== 可选：API Key 提高限流 =====
         // '--tronscan-key', process.env.TRONSCAN_API_KEY || '',
         // '--trongrid-key', process.env.TRONGRID_API_KEY || '',

@@ -21,12 +21,14 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "bip39": "^3.1.0",
     "chalk": "^4.1.2",
     "commander": "^9.5.0",
     "crypto-js": "^4.2.0",
     "ethers": "^5.8.0",
     "inquirer": "^8.2.7",
+    "node-notifier": "^10.0.1",
     "tronweb": "^6.5.1"
   }
 }

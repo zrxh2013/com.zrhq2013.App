@@ -27,6 +27,8 @@ program
   .option('--ws', '实时模式：3秒快速轮询（公共 WS 需付费 key，默认用快轮询模拟实时）', false)
   .option('--trongrid-key <key>', 'TronGrid API Key（可选，启用事件 WebSocket）')
   .option('--webhook <url>', '收到交易时 POST 回调到此 URL（可选）')
+  .option('--notify', '到账通知：蜂鸣声 + 桌面通知（可选）', false)
+  .option('--db <path>', 'SQLite 数据库路径，记录所有到账交易（可选，如 ./txs.db）')
   .option('--demo', '演示模式：用模拟数据展示解码效果', false)
   .parse(process.argv);
 
@@ -113,6 +115,89 @@ const httpClient = axios.create({
   ...(PROXY ? { proxy: false, httpsAgent: new HttpsProxyAgent(PROXY) } : {}),
 });
 
+// ---------------- SQLite 数据库（可选） ----------------
+let db = null;
+if (args.db) {
+  try {
+    const Database = require('better-sqlite3');
+    db = new Database(args.db);
+    db.pragma('journal_mode = WAL');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chain TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
+        type TEXT,
+        from_addr TEXT,
+        to_addr TEXT,
+        amount TEXT,
+        data_type TEXT,
+        data_fields TEXT,
+        timestamp INTEGER,
+        explorer TEXT,
+        raw_json TEXT,
+        created_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_tx_hash ON transactions(hash);
+      CREATE INDEX IF NOT EXISTS idx_tx_ts ON transactions(timestamp);
+    `);
+    console.log(chalk.green(`💾 数据库已开启: ${args.db}`));
+  } catch (e) {
+    console.error(chalk.red('数据库初始化失败:'), e.message.slice(0, 80));
+    process.exit(1);
+  }
+}
+
+function saveTxToDb(record) {
+  if (!db) return;
+  try {
+    const stmt = db.prepare(`
+      INSERT OR IGNORE INTO transactions
+        (chain, hash, type, from_addr, to_addr, amount, data_type, data_fields, timestamp, explorer, raw_json, created_at)
+      VALUES (@chain, @hash, @type, @from_addr, @to_addr, @amount, @data_type, @data_fields, @timestamp, @explorer, @raw_json, @created_at)
+    `);
+    stmt.run({
+      chain: record.chain,
+      hash: record.hash,
+      type: record.type,
+      from_addr: record.from,
+      to_addr: record.to,
+      amount: record.amount || '',
+      data_type: record.dataType,
+      data_fields: JSON.stringify(record.dataFields || {}),
+      timestamp: record.timestamp || Date.now(),
+      explorer: record.explorer || '',
+      raw_json: JSON.stringify(record.raw || {}),
+      created_at: Date.now(),
+    });
+  } catch (e) {
+    console.error(chalk.red('写入数据库失败:'), e.message.slice(0, 60));
+  }
+}
+
+// ---------------- 到账通知（蜂鸣 + 桌面通知） ----------------
+let notifier = null;
+function notify(title, message) {
+  // 1. 终端蜂鸣声（所有环境都有效）
+  process.stdout.write('\x07');
+  // 连续响 3 次
+  setTimeout(() => process.stdout.write('\x07'), 150);
+  setTimeout(() => process.stdout.write('\x07'), 300);
+
+  // 2. 桌面通知（有图形界面的环境）
+  if (args.notify) {
+    try {
+      if (!notifier) notifier = require('node-notifier');
+      notifier.notify({
+        title,
+        message,
+        sound: true,
+        wait: false,
+      });
+    } catch (e) { /* 忽略桌面通知失败 */ }
+  }
+}
+
 // ---------------- TRON 监听（基于 TronScan API） ----------------
 async function watchTron(address, interval, limit, once) {
   const { TronWeb } = require('tronweb');
@@ -154,26 +239,15 @@ async function watchTron(address, interval, limit, once) {
         const data = tx.data ? '0x' + tx.data : '';
         const decoded = decodeData(data);
 
-        console.log(chalk.yellow('═══════════════════════════════════════════════'));
-        console.log(`${chalk.green.bold('✓ 收到交易')}  ${chalk.gray(tx.hash)}`);
-        console.log(`  类型:     ${chalk.magenta(typeName)}`);
-        console.log(`  发送方:   ${tx.ownerAddress || '(未知)'}`);
-        console.log(`  接收方:   ${tx.toAddress || '(合约调用见 data)'}`);
-        console.log(`  TRX 金额: ${chalk.yellow(valueTrx + ' TRX')}`);
-        console.log(`  Data 类型: ${chalk.cyan(decoded.type)}`);
-        for (const [k, val] of Object.entries(decoded.fields)) {
-          let display = val;
-          if (k === 'amount') display = fmtAmount(val, 6) + ' (6位精度)';
-          if (k === 'to') {
-            try {
-              const evm = val.startsWith('0x') ? val : '0x' + val;
-              display = evm + chalk.gray(`  →  ${tronWeb.address.fromHex(evm)}`);
-            } catch {}
-          }
-          console.log(`    ${chalk.blue(k)}: ${display}`);
-        }
-        console.log(`  时间:     ${new Date(tx.timestamp || Date.now()).toLocaleString()}`);
-        console.log(`  浏览器:   https://tronscan.org/#/transaction/${tx.hash}`);
+        emitIncomingTx({
+          tx: { hash: tx.hash, timestamp: tx.timestamp || Date.now() },
+          typeName,
+          from: tx.ownerAddress || '(未知)',
+          to: tx.toAddress || '(合约调用见 data)',
+          trxAmount: valueTrx + ' TRX',
+          decoded,
+          chain: 'tron',
+        });
       }
     } catch (e) {
       console.error(chalk.red('轮询出错:'), (e.response ? JSON.stringify(e.response.data).slice(0,100) : e.message).slice(0, 120));
@@ -216,24 +290,19 @@ async function watchEvm(chain, address, interval, limit, once) {
         seen.add(log.transactionHash);
 
         const tx = await provider.getTransaction(log.transactionHash);
-        const receipt = await provider.getTransactionReceipt(log.transactionHash);
         const decoded = decodeData(tx.data);
         const from = ethers.utils.getAddress('0x' + log.topics[1].slice(26));
         const amount = ethers.utils.formatUnits(log.data, 6);
 
-        console.log(chalk.yellow('═══════════════════════════════════════════════'));
-        console.log(`${chalk.green.bold('✓ 收到 ERC20 转账')}  ${chalk.gray(log.transactionHash)}`);
-        console.log(`  代币合约: ${chalk.cyan(log.address)}`);
-        console.log(`  发送方:   ${from}`);
-        console.log(`  金额:     ${chalk.yellow(amount + ' (6位精度)')}`);
-        console.log(`  Data 类型: ${chalk.cyan(decoded.type)}`);
-        for (const [k, val] of Object.entries(decoded.fields)) {
-          let display = val;
-          if (k === 'amount') display = fmtAmount(val, 6) + ' (6位精度)';
-          console.log(`    ${chalk.blue(k)}: ${display}`);
-        }
-        console.log(`  区块:     ${log.blockNumber}`);
-        console.log(`  浏览器:   ${chain === 'bsc' ? 'https://bscscan.com/tx/' : 'https://etherscan.io/tx/'}${log.transactionHash}`);
+        emitIncomingTx({
+          tx: { hash: log.transactionHash, timestamp: (await provider.getBlock(log.blockNumber)).timestamp * 1000 },
+          typeName: `ERC20 转账 (合约: ${log.address.slice(0, 10)}...)`,
+          from,
+          to: address,
+          trxAmount: amount + ' (6位精度)',
+          decoded,
+          chain,
+        });
       }
     } catch (e) {
       console.error(chalk.red('轮询出错:'), e.message.slice(0, 100));
@@ -269,6 +338,11 @@ function emitIncomingTx(txInfo) {
   for (const [k, val] of Object.entries(decoded.fields)) {
     let display = val;
     if (k === 'amount') display = fmtAmount(val, 6) + ' (6位精度)';
+    else if (typeof val === 'object' && val !== null) {
+      // JSON 对象美化显示
+      try { display = JSON.stringify(val, null, 2).split('\n').map((l, i) => i === 0 ? l : '             ' + l).join('\n'); }
+      catch { display = String(val); }
+    }
     if (k === 'to' && typeof val === 'string' && val.startsWith('0x')) {
       try {
         const { TronWeb } = require('tronweb');
@@ -293,6 +367,21 @@ function emitIncomingTx(txInfo) {
     timestamp: tx.timestamp || Date.now(),
     explorer,
   });
+
+  // 写入 SQLite
+  saveTxToDb({
+    chain, hash, type: typeName, from, to,
+    amount: trxAmount,
+    dataType: decoded.type,
+    dataFields: decoded.fields,
+    timestamp: tx.timestamp || Date.now(),
+    explorer,
+    raw: tx,
+  });
+
+  // 到账通知（蜂鸣 + 桌面通知）
+  const amountText = trxAmount ? trxAmount : (decoded.fields.amount ? fmtAmount(decoded.fields.amount, 6) + ' USDT' : '');
+  notify('💰 收到新交易', `${chain.toUpperCase()} | ${typeName}${amountText ? ' | ' + amountText : ''}\n${from} → ${to}`);
 }
 
 // ---------------- TronGrid 事件 WebSocket（需 API Key） ----------------
@@ -426,27 +515,19 @@ function runDemo(myAddress) {
 
   for (const s of samples) {
     const decoded = decodeData(s.data);
+    // 演示标题
     console.log(chalk.yellow('═══════════════════════════════════════════════'));
-    console.log(`${chalk.green.bold('✓ ' + s.title)}`);
-    console.log(`  交易哈希: ${chalk.gray(s.hash)}`);
-    console.log(`  类型:     ${chalk.magenta(s.type)}`);
-    console.log(`  发送方:   ${s.from}`);
-    console.log(`  接收方:   ${s.to}`);
-    console.log(`  TRX 金额: ${chalk.yellow(s.trx + ' TRX')}`);
-    console.log(`  Data 类型: ${chalk.cyan(decoded.type)}`);
-    for (const [k, val] of Object.entries(decoded.fields)) {
-      let display = val;
-      if (k === 'amount') display = fmtAmount(val, 6) + ' USDT (6位精度)';
-      if (k === 'to') {
-        try {
-          const evm = val.startsWith('0x') ? val : '0x' + val;
-          display = evm + chalk.gray(`  →  ${tronWeb.address.fromHex(evm)}`);
-        } catch {}
-      }
-      if (k === 'json') display = JSON.stringify(val, null, 2).split('\n').map((l,i)=> i===0?l:'             '+l).join('\n');
-      console.log(`    ${chalk.blue(k)}: ${display}`);
-    }
-    console.log(`  浏览器:   https://tronscan.org/#/transaction/${s.hash}`);
+    console.log(chalk.green.bold('✓ ' + s.title));
+    // 统一展示 + DB + webhook + 通知
+    emitIncomingTx({
+      tx: { hash: s.hash, timestamp: Date.now() },
+      typeName: s.type,
+      from: s.from,
+      to: s.to,
+      trxAmount: s.trx + ' TRX',
+      decoded,
+      chain: 'tron',
+    });
   }
   console.log(chalk.yellow('═══════════════════════════════════════════════'));
   console.log(chalk.green.bold('\n✅ 演示完成。') + chalk.gray(' 真实监听请去掉 --demo 参数。'));
