@@ -29,6 +29,8 @@ module.exports = {
         '--min-amount', process.env.MIN_AMOUNT || '0',
         // ===== SQLite 数据库记录所有到账交易 =====
         '--db', process.env.DB_PATH || './data/transactions.db',
+        // ===== 定时自动导出 CSV（每 N 小时，0=关闭）=====
+        '--auto-export', process.env.AUTO_EXPORT_HOURS || '24',
         // ===== 可选：API Key 提高限流 =====
         // '--tronscan-key', process.env.TRONSCAN_API_KEY || '',
         // '--trongrid-key', process.env.TRONGRID_API_KEY || '',

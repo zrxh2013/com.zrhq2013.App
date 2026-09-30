@@ -31,6 +31,10 @@ program
   .option('--min-amount <n>', '通知阈值：仅当金额 >= N USDT 时才触发通知/webhook（DB 仍全量记录）', '0')
   .option('--db <path>', 'SQLite 数据库路径，记录所有到账交易（可选，如 ./txs.db）')
   .option('--export-csv <path>', '从 --db 导出交易记录为 CSV 文件后退出', '')
+  .option('--query', '查询模式：从 --db 按日期范围查询交易后退出', false)
+  .option('--from <date>', '查询/导出起始日期（YYYY-MM-DD 或 ISO 时间戳）', '')
+  .option('--to <date>', '查询/导出结束日期（YYYY-MM-DD 或 ISO 时间戳）', '')
+  .option('--auto-export <hours>', '监听期间每隔 N 小时自动导出 CSV（如 24 = 每天）', '0')
   .option('--demo', '演示模式：用模拟数据展示解码效果', false)
   .parse(process.argv);
 
@@ -193,7 +197,29 @@ function saveTxToDb(record) {
   }
 }
 
-// ---------------- 导出 CSV ----------------
+// 日期解析：isEnd=true 时，YYYY-MM-DD 解析为当天 23:59:59
+function parseDateToTs(s, isEnd = false) {
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const base = new Date(s + 'T00:00:00').getTime();
+    return isEnd ? base + 24 * 3600 * 1000 - 1 : base;
+  }
+  const ts = Date.parse(s);
+  return isNaN(ts) ? null : ts;
+}
+
+// 根据 --from / --to 构建 SQL 条件
+function buildDateClause() {
+  const fromTs = parseDateToTs(args.from, false);
+  const toTs = parseDateToTs(args.to, true);
+  const conds = [];
+  const params = {};
+  if (fromTs !== null) { conds.push('timestamp >= @fromTs'); params.fromTs = fromTs; }
+  if (toTs !== null) { conds.push('timestamp <= @toTs'); params.toTs = toTs; }
+  return { where: conds.length ? 'WHERE ' + conds.join(' AND ') : '', params };
+}
+
+// ---------------- 导出 CSV（支持日期范围） ----------------
 function exportCsv(dbPath, outPath) {
   if (!dbPath) {
     console.error(chalk.red('错误: 导出 CSV 需要同时指定 --db <数据库路径>'));
@@ -201,7 +227,8 @@ function exportCsv(dbPath, outPath) {
   }
   const Database = require('better-sqlite3');
   const db = new Database(dbPath, { readonly: true });
-  const rows = db.prepare('SELECT * FROM transactions ORDER BY id').all();
+  const { where, params } = buildDateClause();
+  const rows = db.prepare(`SELECT * FROM transactions ${where} ORDER BY id`).all(params);
 
   const headers = ['id', 'chain', 'hash', 'type', 'from_addr', 'to_addr', 'amount', 'data_type', 'data_fields', 'timestamp', 'explorer', 'created_at'];
   const escapeCsv = (v) => {
@@ -216,7 +243,53 @@ function exportCsv(dbPath, outPath) {
   }
   const fs = require('fs');
   fs.writeFileSync(outPath, '\uFEFF' + lines.join('\n'), 'utf8');  // BOM 让 Excel 正确识别 UTF-8
-  console.log(chalk.green(`📄 已导出 ${rows.length} 条记录 → ${outPath}`));
+  const range = (args.from || args.to) ? `（${args.from || '起始'} ~ ${args.to || '至今'}）` : '';
+  console.log(chalk.green(`📄 已导出 ${rows.length} 条记录${range} → ${outPath}`));
+}
+
+// ---------------- 按日期范围查询交易 ----------------
+function queryTransactions(dbPath) {
+  if (!dbPath) {
+    console.error(chalk.red('错误: 查询需要指定 --db <数据库路径>'));
+    process.exit(1);
+  }
+  const Database = require('better-sqlite3');
+  const db = new Database(dbPath, { readonly: true });
+  const { where, params } = buildDateClause();
+  const rows = db.prepare(`SELECT id, chain, hash, type, from_addr, to_addr, amount, data_type, timestamp, explorer FROM transactions ${where} ORDER BY id DESC`).all(params);
+
+  const range = (args.from || args.to) ? `${args.from || '起始'} ~ ${args.to || '至今'}` : '全部';
+  console.log(chalk.green.bold(`\n🔍 查询结果 (${range})：共 ${rows.length} 条\n`));
+
+  if (rows.length === 0) {
+    console.log(chalk.gray('（无匹配记录）'));
+    return;
+  }
+
+  // 统计
+  const total = rows.length;
+  const byType = {};
+  for (const r of rows) byType[r.type] = (byType[r.type] || 0) + 1;
+  console.log(chalk.cyan('📊 统计:'));
+  console.log(`  总数: ${total}`);
+  for (const [t, c] of Object.entries(byType)) console.log(`  ${t}: ${c} 笔`);
+  console.log('');
+
+  // 明细
+  console.log(chalk.cyan('📋 明细:'));
+  for (const r of rows) {
+    const time = new Date(r.timestamp).toLocaleString();
+    console.log(chalk.yellow('───────────────────────────────────────────────'));
+    console.log(`[${r.id}] ${chalk.magenta(r.chain.toUpperCase())} | ${r.type}`);
+    console.log(`  时间:   ${time}`);
+    console.log(`  发送:   ${r.from_addr}`);
+    console.log(`  接收:   ${r.to_addr}`);
+    console.log(`  金额:   ${chalk.yellow(r.amount || '-')}`);
+    console.log(`  Data:   ${r.data_type}`);
+    console.log(`  哈希:   ${r.hash}`);
+    console.log(`  浏览器: ${r.explorer}`);
+  }
+  console.log(chalk.yellow('───────────────────────────────────────────────'));
 }
 
 // ---------------- 到账通知（蜂鸣 + 桌面通知） ----------------
@@ -610,6 +683,12 @@ function runDemo(myAddress) {
     return;
   }
 
+  // 查询模式：按日期范围查询后退出
+  if (args.query) {
+    queryTransactions(args.db);
+    return;
+  }
+
   // 演示模式：可省略地址
   if (args.demo) {
     runDemo(address || 'TXKRaDanNVNhXKNWTHZ24vED3wuP2J7N4t');
@@ -623,6 +702,20 @@ function runDemo(myAddress) {
 
   const interval = parseInt(args.interval, 10);
   const limit = parseInt(args.limit, 10);
+
+  // 定时自动导出 CSV（--auto-export N 小时）
+  const autoExportHours = parseFloat(args.autoExport || '0');
+  if (autoExportHours > 0 && args.db) {
+    const exportDir = require('path').dirname(args.db);
+    setInterval(() => {
+      const ts = new Date();
+      const stamp = `${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}_${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}`;
+      const outPath = require('path').join(exportDir, `transactions_${stamp}.csv`);
+      console.log(chalk.gray(`\n⏰ 自动导出 CSV（每 ${autoExportHours} 小时）...`));
+      try { exportCsv(args.db, outPath); } catch (e) { console.error(chalk.red('自动导出失败:'), e.message.slice(0,60)); }
+    }, autoExportHours * 3600 * 1000);
+    console.log(chalk.gray(`🕐 已启用自动导出：每 ${autoExportHours} 小时导出到 ${exportDir}/`));
+  }
 
   try {
     // 优先：TronGrid 事件 WebSocket（有 key 时）
