@@ -25,6 +25,8 @@ module.exports = {
         '--ws',
         // ===== 到账通知（蜂鸣+桌面通知）=====
         '--notify',
+        // ===== 通知金额阈值（仅 >= 此值才通知，DB 仍全量记录）=====
+        '--min-amount', process.env.MIN_AMOUNT || '0',
         // ===== SQLite 数据库记录所有到账交易 =====
         '--db', process.env.DB_PATH || './data/transactions.db',
         // ===== 可选：API Key 提高限流 =====

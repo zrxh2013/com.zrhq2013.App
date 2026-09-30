@@ -28,7 +28,9 @@ program
   .option('--trongrid-key <key>', 'TronGrid API Key（可选，启用事件 WebSocket）')
   .option('--webhook <url>', '收到交易时 POST 回调到此 URL（可选）')
   .option('--notify', '到账通知：蜂鸣声 + 桌面通知（可选）', false)
+  .option('--min-amount <n>', '通知阈值：仅当金额 >= N USDT 时才触发通知/webhook（DB 仍全量记录）', '0')
   .option('--db <path>', 'SQLite 数据库路径，记录所有到账交易（可选，如 ./txs.db）')
+  .option('--export-csv <path>', '从 --db 导出交易记录为 CSV 文件后退出', '')
   .option('--demo', '演示模式：用模拟数据展示解码效果', false)
   .parse(process.argv);
 
@@ -99,6 +101,22 @@ function fmtAmount(raw, decimals = 6) {
     const big = ethers.BigNumber.isBigNumber(raw) ? raw : ethers.BigNumber.from(raw);
     return ethers.utils.formatUnits(big, decimals);
   } catch { return String(raw); }
+}
+
+// 从交易信息中提取数值金额（单位：USDT，6位精度），用于阈值判断
+function extractAmountValue(trxAmount, decoded) {
+  // 1. 优先用 data 解码出的 amount（USDT transfer 的金额）
+  if (decoded && decoded.fields && decoded.fields.amount !== undefined) {
+    try {
+      return parseFloat(fmtAmount(decoded.fields.amount, 6));
+    } catch {}
+  }
+  // 2. 其次用 trxAmount 字符串（如 "1.500000 TRX" 或 "100.0 (6位精度)"）
+  if (trxAmount) {
+    const m = String(trxAmount).match(/([\d.]+)/);
+    if (m) return parseFloat(m[1]);
+  }
+  return 0;
 }
 
 // ---------------- 代理感知的 HTTP GET ----------------
@@ -173,6 +191,32 @@ function saveTxToDb(record) {
   } catch (e) {
     console.error(chalk.red('写入数据库失败:'), e.message.slice(0, 60));
   }
+}
+
+// ---------------- 导出 CSV ----------------
+function exportCsv(dbPath, outPath) {
+  if (!dbPath) {
+    console.error(chalk.red('错误: 导出 CSV 需要同时指定 --db <数据库路径>'));
+    process.exit(1);
+  }
+  const Database = require('better-sqlite3');
+  const db = new Database(dbPath, { readonly: true });
+  const rows = db.prepare('SELECT * FROM transactions ORDER BY id').all();
+
+  const headers = ['id', 'chain', 'hash', 'type', 'from_addr', 'to_addr', 'amount', 'data_type', 'data_fields', 'timestamp', 'explorer', 'created_at'];
+  const escapeCsv = (v) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  const lines = [headers.join(',')];
+  for (const r of rows) {
+    lines.push(headers.map(h => escapeCsv(r[h])).join(','));
+  }
+  const fs = require('fs');
+  fs.writeFileSync(outPath, '\uFEFF' + lines.join('\n'), 'utf8');  // BOM 让 Excel 正确识别 UTF-8
+  console.log(chalk.green(`📄 已导出 ${rows.length} 条记录 → ${outPath}`));
 }
 
 // ---------------- 到账通知（蜂鸣 + 桌面通知） ----------------
@@ -358,17 +402,28 @@ function emitIncomingTx(txInfo) {
     : (chain === 'bsc' ? `https://bscscan.com/tx/${hash}` : `https://etherscan.io/tx/${hash}`);
   console.log(`  浏览器:   ${explorer}`);
 
-  // webhook 推送
-  sendWebhook({
-    chain, hash, type: typeName, from, to,
-    amount: trxAmount,
-    dataType: decoded.type,
-    dataFields: decoded.fields,
-    timestamp: tx.timestamp || Date.now(),
-    explorer,
-  });
+  // 金额阈值判断（仅影响通知和 webhook，DB 仍全量记录）
+  const amountValue = extractAmountValue(trxAmount, decoded);
+  const minAmount = parseFloat(args.minAmount || '0');
+  const passThreshold = amountValue >= minAmount;
 
-  // 写入 SQLite
+  if (!passThreshold) {
+    console.log(chalk.gray(`  ⏭  金额 ${amountValue} < 阈值 ${minAmount}，跳过通知/webhook（仍已入库）`));
+  }
+
+  // webhook 推送（受阈值控制）
+  if (passThreshold) {
+    sendWebhook({
+      chain, hash, type: typeName, from, to,
+      amount: trxAmount,
+      dataType: decoded.type,
+      dataFields: decoded.fields,
+      timestamp: tx.timestamp || Date.now(),
+      explorer,
+    });
+  }
+
+  // 写入 SQLite（不受阈值控制，全量记录）
   saveTxToDb({
     chain, hash, type: typeName, from, to,
     amount: trxAmount,
@@ -379,9 +434,11 @@ function emitIncomingTx(txInfo) {
     raw: tx,
   });
 
-  // 到账通知（蜂鸣 + 桌面通知）
-  const amountText = trxAmount ? trxAmount : (decoded.fields.amount ? fmtAmount(decoded.fields.amount, 6) + ' USDT' : '');
-  notify('💰 收到新交易', `${chain.toUpperCase()} | ${typeName}${amountText ? ' | ' + amountText : ''}\n${from} → ${to}`);
+  // 到账通知（受阈值控制）
+  if (passThreshold) {
+    const amountText = trxAmount ? trxAmount : (decoded.fields.amount ? fmtAmount(decoded.fields.amount, 6) + ' USDT' : '');
+    notify('💰 收到新交易', `${chain.toUpperCase()} | ${typeName}${amountText ? ' | ' + amountText : ''}\n${from} → ${to}`);
+  }
 }
 
 // ---------------- TronGrid 事件 WebSocket（需 API Key） ----------------
@@ -545,6 +602,12 @@ function runDemo(myAddress) {
       const w = new ethers.Wallet(args.pk);
       address = w.address;
     }
+  }
+
+  // 导出 CSV：从 --db 读取并导出后退出
+  if (args.exportCsv) {
+    exportCsv(args.db, args.exportCsv);
+    return;
   }
 
   // 演示模式：可省略地址
