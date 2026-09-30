@@ -242,7 +242,7 @@ function exportCsv(dbPath, outPath) {
     lines.push(headers.map(h => escapeCsv(r[h])).join(','));
   }
   const fs = require('fs');
-  fs.writeFileSync(outPath, '\uFEFF' + lines.join('\n'), 'utf8');  // BOM 让 Excel 正确识别 UTF-8
+  fs.writeFileSync(outPath, '\uFEFF' + lines.join('\n') + '\n', 'utf8');  // BOM 让 Excel 正确识别 UTF-8
   const range = (args.from || args.to) ? `（${args.from || '起始'} ~ ${args.to || '至今'}）` : '';
   console.log(chalk.green(`📄 已导出 ${rows.length} 条记录${range} → ${outPath}`));
 }
