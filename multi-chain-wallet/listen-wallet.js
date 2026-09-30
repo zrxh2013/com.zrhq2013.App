@@ -24,6 +24,9 @@ program
   .option('--limit <n>', '每次拉取的交易数', '30')
   .option('--once', '只查询一次不循环', false)
   .option('--tronscan-key <key>', 'TronScan API Key（可选，提高限流额度）')
+  .option('--ws', '实时模式：3秒快速轮询（公共 WS 需付费 key，默认用快轮询模拟实时）', false)
+  .option('--trongrid-key <key>', 'TronGrid API Key（可选，启用事件 WebSocket）')
+  .option('--webhook <url>', '收到交易时 POST 回调到此 URL（可选）')
   .option('--demo', '演示模式：用模拟数据展示解码效果', false)
   .parse(process.argv);
 
@@ -241,6 +244,142 @@ async function watchEvm(chain, address, interval, limit, once) {
   if (!once) setInterval(tick, interval);
 }
 
+// ---------------- Webhook 回调 ----------------
+async function sendWebhook(payload) {
+  if (!args.webhook) return;
+  try {
+    await httpClient.post(args.webhook, payload, { timeout: 8000 });
+    console.log(chalk.gray(`  📤 webhook 已推送 → ${args.webhook}`));
+  } catch (e) {
+    console.error(chalk.red(`  webhook 推送失败: ${e.message.slice(0, 60)}`));
+  }
+}
+
+// ---------------- 统一的交易展示 + webhook ----------------
+function emitIncomingTx(txInfo) {
+  const { tx, typeName, from, to, trxAmount, decoded, chain } = txInfo;
+  const hash = tx.hash || tx.transactionHash || tx.txID;
+  console.log(chalk.yellow('═══════════════════════════════════════════════'));
+  console.log(`${chalk.green.bold('✓ 收到交易')}  ${chalk.gray(hash)}`);
+  console.log(`  类型:     ${chalk.magenta(typeName)}`);
+  console.log(`  发送方:   ${from}`);
+  console.log(`  接收方:   ${to}`);
+  if (trxAmount) console.log(`  金额:     ${chalk.yellow(trxAmount)}`);
+  console.log(`  Data 类型: ${chalk.cyan(decoded.type)}`);
+  for (const [k, val] of Object.entries(decoded.fields)) {
+    let display = val;
+    if (k === 'amount') display = fmtAmount(val, 6) + ' (6位精度)';
+    if (k === 'to' && typeof val === 'string' && val.startsWith('0x')) {
+      try {
+        const { TronWeb } = require('tronweb');
+        const tw = new TronWeb({ fullHost: 'https://api.trongrid.io' });
+        display = val + chalk.gray(`  →  ${tw.address.fromHex(val)}`);
+      } catch {}
+    }
+    console.log(`    ${chalk.blue(k)}: ${display}`);
+  }
+  if (tx.timestamp) console.log(`  时间:     ${new Date(tx.timestamp).toLocaleString()}`);
+  const explorer = chain === 'tron'
+    ? `https://tronscan.org/#/transaction/${hash}`
+    : (chain === 'bsc' ? `https://bscscan.com/tx/${hash}` : `https://etherscan.io/tx/${hash}`);
+  console.log(`  浏览器:   ${explorer}`);
+
+  // webhook 推送
+  sendWebhook({
+    chain, hash, type: typeName, from, to,
+    amount: trxAmount,
+    dataType: decoded.type,
+    dataFields: decoded.fields,
+    timestamp: tx.timestamp || Date.now(),
+    explorer,
+  });
+}
+
+// ---------------- TronGrid 事件 WebSocket（需 API Key） ----------------
+async function watchTronEventWS(address, trongridKey) {
+  const WebSocket = require('ws');
+  const { HttpsProxyAgent } = require('https-proxy-agent');
+  const agent = PROXY ? new HttpsProxyAgent(PROXY) : undefined;
+  const seen = new Set();
+  let ws = null;
+  let reconnectTimer = null;
+
+  const connect = () => {
+    // TronGrid 事件流：监听合约 Transfer 事件，过滤 to=address
+    const url = `wss://api.trongrid.io/v1/accounts/${address}/events?api_key=${trongridKey}`;
+    console.log(chalk.green.bold(`\n🌐 TronGrid 事件 WebSocket 连接中...`));
+    console.log(`URL: ${chalk.gray(url.replace(trongridKey, '***'))}`);
+
+    ws = new WebSocket(url, agent ? { agent } : {});
+
+    ws.on('open', () => {
+      console.log(chalk.green('✅ WebSocket 已连接，等待实时事件...\n'));
+    });
+
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        // TronGrid 事件格式可能不同，这里做通用处理
+        const txHash = msg.transaction_id || msg.txID || msg.hash;
+        if (!txHash || seen.has(txHash)) return;
+        seen.add(txHash);
+
+        const event = msg.event_name || msg.event || 'Unknown';
+        const result = msg.result || {};
+        const decoded = {
+          type: '事件: ' + event,
+          fields: typeof result === 'object' ? result : { value: result },
+        };
+
+        emitIncomingTx({
+          tx: { hash: txHash, timestamp: msg.block_timestamp || Date.now() },
+          typeName: event,
+          from: result.from || msg.from || '(见事件)',
+          to: result.to || address,
+          trxAmount: result.value ? fmtAmount(result.value, 6) : '',
+          decoded,
+          chain: 'tron',
+        });
+      } catch (e) {
+        // 心跳消息等无法解析，忽略
+      }
+    });
+
+    ws.on('error', (e) => {
+      console.error(chalk.red(`WebSocket 错误: ${e.message.slice(0, 80)}`));
+    });
+
+    ws.on('close', (code) => {
+      console.log(chalk.yellow(`🔌 WebSocket 断开 (code=${code})，5秒后重连...`));
+      reconnectTimer = setTimeout(connect, 5000);
+    });
+  };
+
+  connect();
+
+  // 优雅退出
+  process.on('SIGINT', () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (ws) ws.close();
+    process.exit(0);
+  });
+}
+
+// ---------------- 实时模式：快速轮询（3秒）----------------
+async function watchRealtime(address, chain, limit) {
+  console.log(chalk.green.bold(`\n⚡ 实时模式启动（快速轮询，间隔 3 秒）`));
+  console.log(`监听地址: ${chalk.cyan(address)}`);
+  console.log(chalk.gray('说明: 公共 TRON WebSocket 需付费 API Key，实时模式用 3s 快轮询达到准实时效果'));
+  console.log(chalk.gray('如需真正的 WS 推送，请加 --trongrid-key 参数\n'));
+
+  // 实时模式直接复用 watchTron/watchEvm，把间隔设为 3000ms
+  if (chain === 'tron') {
+    await watchTron(address, 3000, limit, false);
+  } else {
+    await watchEvm(chain, address, 3000, limit, false);
+  }
+}
+
 // ---------------- 演示模式：模拟 3 种 data 类型的到账交易 ----------------
 function runDemo(myAddress) {
   const { TronWeb } = require('tronweb');
@@ -342,7 +481,16 @@ function runDemo(myAddress) {
   const limit = parseInt(args.limit, 10);
 
   try {
-    if (args.chain === 'tron') {
+    // 优先：TronGrid 事件 WebSocket（有 key 时）
+    if (args.trongridKey && args.chain === 'tron') {
+      await watchTronEventWS(address, args.trongridKey);
+    }
+    // 实时模式：3 秒快速轮询
+    else if (args.ws) {
+      await watchRealtime(address, args.chain, limit);
+    }
+    // 普通轮询
+    else if (args.chain === 'tron') {
       await watchTron(address, interval, limit, args.once);
     } else {
       await watchEvm(args.chain, address, interval, limit, args.once);
