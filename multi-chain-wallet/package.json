@@ -26,6 +26,7 @@
     "commander": "^9.5.0",
     "crypto-js": "^4.2.0",
     "ethers": "^5.8.0",
-    "inquirer": "^8.2.7"
+    "inquirer": "^8.2.7",
+    "tronweb": "^6.5.1"
   }
 }
