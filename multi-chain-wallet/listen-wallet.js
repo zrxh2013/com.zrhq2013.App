@@ -32,9 +32,12 @@ program
   .option('--db <path>', 'SQLite 数据库路径，记录所有到账交易（可选，如 ./txs.db）')
   .option('--export-csv <path>', '从 --db 导出交易记录为 CSV 文件后退出', '')
   .option('--query', '查询模式：从 --db 按日期范围查询交易后退出', false)
-  .option('--from <date>', '查询/导出起始日期（YYYY-MM-DD 或 ISO 时间戳）', '')
-  .option('--to <date>', '查询/导出结束日期（YYYY-MM-DD 或 ISO 时间戳）', '')
+  .option('--stats', '统计模式：从 --db 按日/按类型汇总金额后退出', false)
+  .option('--from <date>', '查询/导出/统计起始日期（YYYY-MM-DD 或 ISO 时间戳）', '')
+  .option('--to <date>', '查询/导出/统计结束日期（YYYY-MM-DD 或 ISO 时间戳）', '')
   .option('--auto-export <hours>', '监听期间每隔 N 小时自动导出 CSV（如 24 = 每天）', '0')
+  .option('--telegram-token <token>', 'Telegram Bot Token（可选，到账推送到 Telegram）', '')
+  .option('--telegram-chat-id <id>', 'Telegram 接收消息的 Chat ID（需配合 --telegram-token）', '')
   .option('--demo', '演示模式：用模拟数据展示解码效果', false)
   .parse(process.argv);
 
@@ -292,6 +295,85 @@ function queryTransactions(dbPath) {
   console.log(chalk.yellow('───────────────────────────────────────────────'));
 }
 
+// ---------------- 金额汇总统计 ----------------
+function showStats(dbPath) {
+  if (!dbPath) {
+    console.error(chalk.red('错误: 统计需要指定 --db <数据库路径>'));
+    process.exit(1);
+  }
+  const Database = require('better-sqlite3');
+  const db = new Database(dbPath, { readonly: true });
+  const { where, params } = buildDateClause();
+
+  // 总览
+  const overview = db.prepare(`SELECT COUNT(*) AS cnt FROM transactions ${where}`).get(params);
+  const range = (args.from || args.to) ? `${args.from || '起始'} ~ ${args.to || '至今'}` : '全部';
+  console.log(chalk.green.bold(`\n📊 金额汇总统计 (${range})：共 ${overview.cnt} 笔\n`));
+
+  if (overview.cnt === 0) {
+    console.log(chalk.gray('（无匹配记录）'));
+    return;
+  }
+
+  // 按日汇总
+  console.log(chalk.cyan('📅 按日汇总:'));
+  const byDay = db.prepare(`
+    SELECT strftime('%Y-%m-%d', timestamp/1000, 'unixepoch', 'localtime') AS day,
+           COUNT(*) AS cnt,
+           GROUP_CONCAT(amount, '|') AS amounts
+    FROM transactions ${where}
+    GROUP BY day ORDER BY day
+  `).all(params);
+  for (const row of byDay) {
+    const total = sumAmounts(row.amounts);
+    console.log(`  ${row.day}  ${String(row.cnt).padStart(4)} 笔  合计 ${chalk.yellow(total)}`);
+  }
+
+  // 按类型汇总
+  console.log(chalk.cyan('\n🏷  按类型汇总:'));
+  const byType = db.prepare(`
+    SELECT type, COUNT(*) AS cnt, GROUP_CONCAT(amount, '|') AS amounts
+    FROM transactions ${where}
+    GROUP BY type ORDER BY cnt DESC
+  `).all(params);
+  for (const row of byType) {
+    const total = sumAmounts(row.amounts);
+    console.log(`  ${row.type.padEnd(40)} ${String(row.cnt).padStart(4)} 笔  合计 ${chalk.yellow(total)}`);
+  }
+
+  console.log('');
+}
+
+// 从 amount 字符串列表中提取数值并求和（兼容 "1.5 TRX" / "100.0" 等格式）
+function sumAmounts(amountsStr) {
+  if (!amountsStr) return '0';
+  let total = 0;
+  for (const a of amountsStr.split('|')) {
+    const m = String(a).match(/([\d.]+)/);
+    if (m) total += parseFloat(m[1]);
+  }
+  return total.toFixed(6);
+}
+
+// ---------------- Telegram 推送 ----------------
+const TG_TOKEN = args.telegramToken || process.env.TELEGRAM_BOT_TOKEN || '';
+const TG_CHAT_ID = args.telegramChatId || process.env.TELEGRAM_CHAT_ID || '';
+let telegramEnabled = !!(TG_TOKEN && TG_CHAT_ID);
+
+async function sendTelegram(text) {
+  if (!telegramEnabled) return;
+  try {
+    await httpClient.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      chat_id: TG_CHAT_ID,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    }, { timeout: 8000 });
+  } catch (e) {
+    console.error(chalk.red('Telegram 推送失败:'), (e.response ? JSON.stringify(e.response.data).slice(0,80) : e.message).slice(0, 100));
+  }
+}
+
 // ---------------- 到账通知（蜂鸣 + 桌面通知） ----------------
 let notifier = null;
 function notify(title, message) {
@@ -511,6 +593,20 @@ function emitIncomingTx(txInfo) {
   if (passThreshold) {
     const amountText = trxAmount ? trxAmount : (decoded.fields.amount ? fmtAmount(decoded.fields.amount, 6) + ' USDT' : '');
     notify('💰 收到新交易', `${chain.toUpperCase()} | ${typeName}${amountText ? ' | ' + amountText : ''}\n${from} → ${to}`);
+
+    // Telegram 推送（HTML 格式）
+    if (telegramEnabled) {
+      const tgMsg = `<b>💰 收到新交易</b>\n` +
+        `<b>链:</b> ${chain.toUpperCase()}\n` +
+        `<b>类型:</b> ${typeName}\n` +
+        (amountText ? `<b>金额:</b> ${amountText}\n` : '') +
+        `<b>发送:</b> <code>${from}</code>\n` +
+        `<b>接收:</b> <code>${to}</code>\n` +
+        (decoded.type !== '无 data' ? `<b>Data:</b> ${decoded.type}\n` : '') +
+        `<b>哈希:</b> <code>${hash}</code>\n` +
+        `<a href="${explorer}">查看浏览器</a>`;
+      sendTelegram(tgMsg).catch(() => {});
+    }
   }
 }
 
@@ -689,6 +785,12 @@ function runDemo(myAddress) {
     return;
   }
 
+  // 统计模式：按日/按类型汇总金额后退出
+  if (args.stats) {
+    showStats(args.db);
+    return;
+  }
+
   // 演示模式：可省略地址
   if (args.demo) {
     runDemo(address || 'TXKRaDanNVNhXKNWTHZ24vED3wuP2J7N4t');
@@ -715,6 +817,10 @@ function runDemo(myAddress) {
       try { exportCsv(args.db, outPath); } catch (e) { console.error(chalk.red('自动导出失败:'), e.message.slice(0,60)); }
     }, autoExportHours * 3600 * 1000);
     console.log(chalk.gray(`🕐 已启用自动导出：每 ${autoExportHours} 小时导出到 ${exportDir}/`));
+  }
+
+  if (telegramEnabled) {
+    console.log(chalk.gray(`✈️  Telegram 推送已启用 → chat_id: ${TG_CHAT_ID}`));
   }
 
   try {
