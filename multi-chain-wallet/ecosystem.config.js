@@ -31,9 +31,9 @@ module.exports = {
         '--db', process.env.DB_PATH || './data/transactions.db',
         // ===== 定时自动导出 CSV（每 N 小时，0=关闭）=====
         '--auto-export', process.env.AUTO_EXPORT_HOURS || '24',
-        // ===== Telegram 推送（可选，需同时设置 token 和 chat_id）=====
-        // '--telegram-token', process.env.TELEGRAM_BOT_TOKEN || '',
-        // '--telegram-chat-id', process.env.TELEGRAM_CHAT_ID || '',
+        // ===== Telegram 推送（需同时设置 TELEGRAM_BOT_TOKEN 和 TELEGRAM_CHAT_ID 环境变量）=====
+        '--telegram-token', process.env.TELEGRAM_BOT_TOKEN || '',
+        '--telegram-chat-id', process.env.TELEGRAM_CHAT_ID || '',
         // ===== 可选：API Key 提高限流 =====
         // '--tronscan-key', process.env.TRONSCAN_API_KEY || '',
         // '--trongrid-key', process.env.TRONGRID_API_KEY || '',
@@ -53,6 +53,9 @@ module.exports = {
         // 代理（沙箱环境需要，生产环境按需去掉）
         HTTPS_PROXY: process.env.HTTPS_PROXY || '',
         HTTP_PROXY: process.env.HTTP_PROXY || '',
+        // Telegram 推送凭据（用户自行在服务器环境变量中设置，不在对话中传递）
+        TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
+        TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || '',
       },
       error_file: './logs/listen-tron-error.log',
       out_file: './logs/listen-tron-out.log',
