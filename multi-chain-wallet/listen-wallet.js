@@ -10,7 +10,12 @@
  *   node listen-wallet.js --chain bsc  --address 0xea2d...5f8e
  *   node listen-wallet.js --chain tron --pk <私钥>          # 用私钥派生地址
  *   node listen-wallet.js --once                          # 只查一次，不循环
+ *
+ * 环境变量: 复制 .env.example 为 .env 并填写（自动加载，无需 export）
  */
+
+// 加载 .env 文件（必须在所有 require 之前）
+try { require('dotenv').config(); } catch (e) { /* dotenv 未安装时忽略 */ }
 
 const { program } = require('commander');
 const chalk = require('chalk');

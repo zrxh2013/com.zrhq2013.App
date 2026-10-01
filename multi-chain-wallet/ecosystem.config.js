@@ -9,7 +9,12 @@
  *   pm2 delete ecosystem.config.js                  # 停止并删除
  *   pm2 save                                        # 保存进程列表（开机自启）
  *   pm2 startup                                     # 生成开机自启命令
+ *
+ * 环境变量: 复制 .env.example 为 .env 并填写（自动加载）
  */
+
+// 加载 .env 文件，使 process.env 包含配置值
+try { require('dotenv').config(); } catch (e) { /* dotenv 未安装时忽略 */ }
 
 module.exports = {
   apps: [
