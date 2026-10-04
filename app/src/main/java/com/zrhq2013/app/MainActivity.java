@@ -46,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Cache settings
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setAppCacheEnabled(true);
 
         // User agent
         settings.setUserAgentString(settings.getUserAgentString());

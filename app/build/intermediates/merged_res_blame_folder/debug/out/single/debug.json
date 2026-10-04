@@ -1,0 +1,42 @@
+[
+    {
+        "merged": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-merged_res-31:/layout_progress_bar.xml.flat",
+        "source": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-main-33:/layout/progress_bar.xml"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-merged_res-31:/drawable_splash_background.xml.flat",
+        "source": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-main-33:/drawable/splash_background.xml"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.zrhq2013.app-main-33:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.zrhq2013.app-main-33:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.zrhq2013.app-main-33:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-main-33:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.zrhq2013.app-main-33:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-merged_res-31:/xml_network_security_config.xml.flat",
+        "source": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-main-33:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-merged_res-31:/drawable_progress_drawable.xml.flat",
+        "source": "/root/.gradle/daemon/8.14.5/com.zrhq2013.app-main-33:/drawable/progress_drawable.xml"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.zrhq2013.app-main-33:/mipmap-mdpi/ic_launcher.png"
+    }
+]
