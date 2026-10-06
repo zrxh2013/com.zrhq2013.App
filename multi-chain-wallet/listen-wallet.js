@@ -158,6 +158,7 @@ if (args.db) {
         chain TEXT NOT NULL,
         hash TEXT NOT NULL UNIQUE,
         type TEXT,
+        direction TEXT,
         from_addr TEXT,
         to_addr TEXT,
         amount TEXT,
@@ -171,6 +172,8 @@ if (args.db) {
       CREATE INDEX IF NOT EXISTS idx_tx_hash ON transactions(hash);
       CREATE INDEX IF NOT EXISTS idx_tx_ts ON transactions(timestamp);
     `);
+    // 兼容旧表：若 direction 列不存在则添加
+    try { db.exec(`ALTER TABLE transactions ADD COLUMN direction TEXT;`); } catch (_) {}
     console.log(chalk.green(`💾 数据库已开启: ${args.db}`));
   } catch (e) {
     console.error(chalk.red('数据库初始化失败:'), e.message.slice(0, 80));
@@ -183,13 +186,14 @@ function saveTxToDb(record) {
   try {
     const stmt = db.prepare(`
       INSERT OR IGNORE INTO transactions
-        (chain, hash, type, from_addr, to_addr, amount, data_type, data_fields, timestamp, explorer, raw_json, created_at)
-      VALUES (@chain, @hash, @type, @from_addr, @to_addr, @amount, @data_type, @data_fields, @timestamp, @explorer, @raw_json, @created_at)
+        (chain, hash, type, direction, from_addr, to_addr, amount, data_type, data_fields, timestamp, explorer, raw_json, created_at)
+      VALUES (@chain, @hash, @type, @direction, @from_addr, @to_addr, @amount, @data_type, @data_fields, @timestamp, @explorer, @raw_json, @created_at)
     `);
     stmt.run({
       chain: record.chain,
       hash: record.hash,
       type: record.type,
+      direction: record.direction || 'in',
       from_addr: record.from,
       to_addr: record.to,
       amount: record.amount || '',
@@ -412,20 +416,28 @@ async function watchTron(address, interval, limit, once) {
   console.log(`监听地址: ${chalk.cyan(address)}`);
   console.log(`数据源:   TronScan API${PROXY ? chalk.gray(' (走代理 ' + PROXY + ')') : ''}`);
   console.log(`轮询间隔: ${interval}ms | 每次拉取: ${limit} 笔`);
-  console.log(chalk.gray('等待到账交易... (Ctrl+C 退出)\n'));
+  console.log(chalk.gray('监听转入 + 转出交易... (Ctrl+C 退出)\n'));
 
   const tick = async () => {
     try {
       const url = `https://apilist.tronscanapi.com/api/transaction?sort=-timestamp&count=true&limit=${limit}&address=${address}`;
       const res = await httpClient.get(url);
       const all = (res.data && res.data.data) || [];
-      // 只保留"转入"本地址的交易：toAddress 或 toAddressList 包含本地址
+      // 保留"转入"或"转出"本地址的交易
+      // 转入：toAddress 或 toAddressList 包含本地址
+      // 转出：ownerAddress 为本地址
       const txs = all.filter(tx =>
-        tx.toAddress === address || (tx.toAddressList || []).includes(address)
+        tx.toAddress === address ||
+        (tx.toAddressList || []).includes(address) ||
+        tx.ownerAddress === address
       );
       for (const tx of txs) {
         if (seen.has(tx.hash)) continue;
         seen.add(tx.hash);
+
+        // 判断方向：本地址作为发送方则为转出，否则为转入
+        const isOut = tx.ownerAddress === address;
+        const direction = isOut ? 'out' : 'in';
 
         const contractType = tx.contractType || 0;
         const typeMap = {
@@ -451,6 +463,7 @@ async function watchTron(address, interval, limit, once) {
           trxAmount: valueTrx + ' TRX',
           decoded,
           chain: 'tron',
+          direction,
         });
       }
     } catch (e) {
@@ -474,7 +487,7 @@ async function watchEvm(chain, address, interval, limit, once) {
   console.log(chalk.green.bold(`\n🚀 ${chain.toUpperCase()} 监听钱包启动`));
   console.log(`监听地址: ${chalk.cyan(address)}`);
   console.log(`RPC:      ${RPC[chain]}`);
-  console.log(chalk.gray('等待到账交易... (Ctrl+C 退出)\n'));
+  console.log(chalk.gray('监听转入 + 转出交易... (Ctrl+C 退出)\n'));
 
   const tick = async () => {
     try {
@@ -486,26 +499,33 @@ async function watchEvm(chain, address, interval, limit, once) {
         fromBlock, toBlock: 'latest',
         topics: [ethers.utils.id('Transfer(address,address,uint256)')],
       });
-      // 过滤出转入 address 的 ERC20 Transfer 事件
+      // 过滤出转入或转出 address 的 ERC20 Transfer 事件
+      // 转入：topics[2] (to) === address
+      // 转出：topics[1] (from) === address
       const addrTopic = '0x' + address.toLowerCase().slice(2).padStart(64, '0');
       for (const log of logs.slice(-limit)) {
-        if (log.topics[2]?.toLowerCase() !== addrTopic) continue;
+        const isIn = log.topics[2]?.toLowerCase() === addrTopic;
+        const isOut = log.topics[1]?.toLowerCase() === addrTopic;
+        if (!isIn && !isOut) continue;
         if (seen.has(log.transactionHash)) continue;
         seen.add(log.transactionHash);
 
+        const direction = isOut ? 'out' : 'in';
         const tx = await provider.getTransaction(log.transactionHash);
         const decoded = decodeData(tx.data);
         const from = ethers.utils.getAddress('0x' + log.topics[1].slice(26));
+        const to = ethers.utils.getAddress('0x' + log.topics[2].slice(26));
         const amount = ethers.utils.formatUnits(log.data, 6);
 
         emitIncomingTx({
           tx: { hash: log.transactionHash, timestamp: (await provider.getBlock(log.blockNumber)).timestamp * 1000 },
           typeName: `ERC20 转账 (合约: ${log.address.slice(0, 10)}...)`,
           from,
-          to: address,
+          to,
           trxAmount: amount + ' (6位精度)',
           decoded,
           chain,
+          direction,
         });
       }
     } catch (e) {
@@ -530,10 +550,12 @@ async function sendWebhook(payload) {
 
 // ---------------- 统一的交易展示 + webhook ----------------
 function emitIncomingTx(txInfo) {
-  const { tx, typeName, from, to, trxAmount, decoded, chain } = txInfo;
+  const { tx, typeName, from, to, trxAmount, decoded, chain, direction = 'in' } = txInfo;
   const hash = tx.hash || tx.transactionHash || tx.txID;
+  const isOut = direction === 'out';
+  const dirLabel = isOut ? '转出交易' : '收到交易';
   console.log(chalk.yellow('═══════════════════════════════════════════════'));
-  console.log(`${chalk.green.bold('✓ 收到交易')}  ${chalk.gray(hash)}`);
+  console.log(`${isOut ? chalk.magenta.bold('↗ 转出交易') : chalk.green.bold('✓ 收到交易')}  ${chalk.gray(hash)}`);
   console.log(`  类型:     ${chalk.magenta(typeName)}`);
   console.log(`  发送方:   ${from}`);
   console.log(`  接收方:   ${to}`);
@@ -574,7 +596,7 @@ function emitIncomingTx(txInfo) {
   // webhook 推送（受阈值控制）
   if (passThreshold) {
     sendWebhook({
-      chain, hash, type: typeName, from, to,
+      chain, hash, type: typeName, from, to, direction,
       amount: trxAmount,
       dataType: decoded.type,
       dataFields: decoded.fields,
@@ -585,7 +607,7 @@ function emitIncomingTx(txInfo) {
 
   // 写入 SQLite（不受阈值控制，全量记录）
   saveTxToDb({
-    chain, hash, type: typeName, from, to,
+    chain, hash, type: typeName, from, to, direction,
     amount: trxAmount,
     dataType: decoded.type,
     dataFields: decoded.fields,
@@ -597,11 +619,12 @@ function emitIncomingTx(txInfo) {
   // 到账通知（受阈值控制）
   if (passThreshold) {
     const amountText = trxAmount ? trxAmount : (decoded.fields.amount ? fmtAmount(decoded.fields.amount, 6) + ' USDT' : '');
-    notify('💰 收到新交易', `${chain.toUpperCase()} | ${typeName}${amountText ? ' | ' + amountText : ''}\n${from} → ${to}`);
+    const notifyTitle = isOut ? '↗ 发起转出交易' : '💰 收到新交易';
+    notify(notifyTitle, `${chain.toUpperCase()} | ${typeName}${amountText ? ' | ' + amountText : ''}\n${from} → ${to}`);
 
     // Telegram 推送（HTML 格式）
     if (telegramEnabled) {
-      const tgMsg = `<b>💰 收到新交易</b>\n` +
+      const tgMsg = `<b>${isOut ? '↗ 发起转出交易' : '💰 收到新交易'}</b>\n` +
         `<b>链:</b> ${chain.toUpperCase()}\n` +
         `<b>类型:</b> ${typeName}\n` +
         (amountText ? `<b>金额:</b> ${amountText}\n` : '') +
@@ -646,6 +669,9 @@ async function watchTronEventWS(address, trongridKey) {
 
         const event = msg.event_name || msg.event || 'Unknown';
         const result = msg.result || {};
+        const fromAddr = result.from || msg.from || '';
+        // TronGrid 账户事件流包含转入和转出，根据 from 判断方向
+        const direction = fromAddr === address ? 'out' : 'in';
         const decoded = {
           type: '事件: ' + event,
           fields: typeof result === 'object' ? result : { value: result },
@@ -654,11 +680,12 @@ async function watchTronEventWS(address, trongridKey) {
         emitIncomingTx({
           tx: { hash: txHash, timestamp: msg.block_timestamp || Date.now() },
           typeName: event,
-          from: result.from || msg.from || '(见事件)',
+          from: fromAddr || '(见事件)',
           to: result.to || address,
           trxAmount: result.value ? fmtAmount(result.value, 6) : '',
           decoded,
           chain: 'tron',
+          direction,
         });
       } catch (e) {
         // 心跳消息等无法解析，忽略
