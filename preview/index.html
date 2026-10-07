@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>闪应用 · 实时预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: linear-gradient(135deg, #1a2a4a 0%, #0f1830 100%);
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 24px;
+  }
+  h1 { color: #fff; font-size: 18px; font-weight: 600; letter-spacing: 1px; }
+  .tip { color: #9db2d8; font-size: 13px; text-align: center; line-height: 1.7; }
+  .tip a { color: #5aa9ff; }
+
+  /* phone frame */
+  .phone {
+    position: relative;
+    width: 405px;
+    height: 875px;
+    background: #000;
+    border-radius: 44px;
+    padding: 6px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 0 2px #2a3550;
+  }
+  .screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 38px;
+    overflow: hidden;
+    background: #fff;
+  }
+  /* status bar */
+  .statusbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 32px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 26px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #111;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(255,255,255,.85), rgba(255,255,255,0));
+  }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; font-size: 11px; }
+  /* fake WebView load progress bar (4dp, blue) */
+  .loadbar {
+    position: absolute;
+    top: 32px; left: 0;
+    height: 4px;
+    width: 0%;
+    background: #2196F3;
+    z-index: 4;
+    animation: load 2.2s ease-out forwards;
+  }
+  @keyframes load {
+    0% { width: 0; }
+    60% { width: 82%; }
+    100% { width: 100%; opacity: 0; }
+  }
+  iframe {
+    width: 393px;
+    height: 863px;
+    border: 0;
+    display: block;
+  }
+  .badge {
+    position: absolute;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    width: 130px; height: 5px;
+    border-radius: 3px;
+    background: rgba(0,0,0,.85);
+    z-index: 5;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <h1>闪应用 · 手机实时预览</h1>
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar">
+        <span>10:24</span>
+        <span class="icons">5G ▮▮▮ 🔋</span>
+      </div>
+      <div class="loadbar"></div>
+      <iframe
+        src="https://www.lingguang.com/share/CHAT-27eb3584-c60f-40ff-a042-ba5a820de81550?sharemedium=others"
+        title="闪应用 WebView 预览"></iframe>
+      <div class="badge"></div>
+    </div>
+  </div>
+  <p class="tip">
+    页面可直接点击、滚动操作，等同 App 内 WebView 首屏（393×851 手机视口）<br/>
+    若页面内有跳转限制，可<a href="https://www.lingguang.com/share/CHAT-27eb3584-c60f-40ff-a042-ba5a820de81550?sharemedium=others" target="_blank" rel="noopener">在新标签页打开 ↗</a>
+  </p>
+</body>
+</html>
