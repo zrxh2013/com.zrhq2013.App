@@ -44,9 +44,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
 
-        // Cache settings
+        // Cache settings (HTTP cache is managed automatically; setAppCache* APIs were removed in API 34)
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setAppCacheEnabled(true);
 
         // User agent
         settings.setUserAgentString(settings.getUserAgentString());

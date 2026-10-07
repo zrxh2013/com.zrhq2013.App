@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- White lightning bolt, kept inside the 72dp adaptive-icon safe zone -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54.1,24.2 L34.3,54.0 L47.3,54.0 L44.2,78.8 L66.5,46.5 L52.3,46.5 Z" />
+</vector>
