@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>老虎机 RNG 原理与概率演示工具</title>
+<style>
+:root{
+  --bg:#0d1015; --card:#161b24; --card2:#1d242f; --line:#2b3442;
+  --fg:#e7ecf3; --mut:#94a2b3; --acc:#e9b53b; --green:#3ddc97;
+  --red:#ff6b6b; --blue:#5aa9ff; --purple:#b08cff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+   radial-gradient(1200px 600px at 80% -10%, #1a2230 0%, transparent 60%),
+   radial-gradient(900px 500px at -10% 10%, #181f2b 0%, transparent 55%),
+   var(--bg);
+  color:var(--fg);
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
+  line-height:1.6;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 18px 60px}
+header{padding:34px 0 14px}
+h1{font-size:26px;margin:0 0 6px;letter-spacing:.5px}
+h1 .gold{color:var(--acc)}
+.sub{color:var(--mut);font-size:14px;margin:0}
+.badge{display:inline-block;font-size:12px;color:var(--green);border:1px solid #245c45;background:#12291f;border-radius:999px;padding:2px 10px;margin-bottom:10px}
+.warn{border-left:3px solid var(--acc);background:#241f12;padding:10px 14px;border-radius:6px;color:#ecd9a0;font-size:13.5px;margin:14px 0}
+.warn b{color:var(--acc)}
+
+/* tabs */
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 0;border-bottom:1px solid var(--line)}
+.tab{
+  appearance:none;background:transparent;border:1px solid transparent;border-bottom:none;
+  color:var(--mut);font-size:14px;padding:9px 16px;cursor:pointer;border-radius:8px 8px 0 0;
+  font-family:inherit;
+}
+.tab:hover{color:var(--fg)}
+.tab.active{color:var(--fg);background:var(--card);border-color:var(--line)}
+.panel{display:none;background:var(--card);border:1px solid var(--line);border-top:none;border-radius:0 10px 10px 10px;padding:22px}
+.panel.active{display:block}
+h2{font-size:18px;margin:0 0 4px}
+h3{font-size:15px;margin:22px 0 8px;color:var(--fg)}
+p{margin:8px 0}
+.muted{color:var(--mut);font-size:13px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:760px){.g2,.g3,.g4{grid-template-columns:1fr 1fr}}
+.card{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.stat .num{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat .lbl{font-size:12px;color:var(--mut)}
+.stat .th{font-size:11.5px;color:#6f7d8e}
+.gold{color:var(--acc)}.green{color:var(--green)}.red{color:var(--red)}.blue{color:var(--blue)}.purple{color:var(--purple)}
+
+button.btn{
+  appearance:none;font-family:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);
+  background:#232c39;color:var(--fg);padding:8px 14px;font-size:13.5px;transition:.15s;
+}
+button.btn:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+button.btn.primary{background:linear-gradient(180deg,#f2c552,#d99e1f);color:#231a02;border-color:#a87c16;font-weight:600}
+button.btn.primary:hover:not(:disabled){filter:brightness(1.08);color:#231a02}
+button.btn.tiny{padding:4px 10px;font-size:12px}
+select,input[type=number],input[type=text]{
+  background:#10151d;border:1px solid var(--line);color:var(--fg);border-radius:8px;
+  padding:7px 10px;font-size:13.5px;font-family:inherit;font-variant-numeric:tabular-nums;
+}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+label.ctl{font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px}
+
+canvas{width:100%;height:100%;display:block;border-radius:8px}
+.cv-box{background:#0f141c;border:1px solid var(--line);border-radius:10px;padding:10px}
+.cv-box.hist{height:300px}
+.cv-box.cond{height:240px}
+.cv-box.rtp{height:360px}
+.cv-box.bar{height:70px}
+
+/* reels */
+.reels{display:flex;gap:12px;justify-content:center;margin:16px 0}
+.tile{
+  width:84px;height:96px;border-radius:10px;background:linear-gradient(180deg,#f4efe2,#dcd3bd);
+  color:#1c2733;font-size:52px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 0 #8c8369, 0 8px 18px rgba(0,0,0,.45);user-select:none;
+}
+.tile.scatter{background:linear-gradient(180deg,#ffe9a8,#f2b53c);box-shadow:0 4px 0 #a87c16,0 0 26px rgba(233,181,59,.6)}
+.tile.spin{animation:shake .12s infinite}
+@keyframes shake{0%{transform:translateY(-2px)}50%{transform:translateY(2px)}100%{transform:translateY(-2px)}}
+.fs-msg{text-align:center;min-height:30px;font-weight:700;color:var(--acc)}
+
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:600;font-size:12px}
+tr:hover td{background:#202836}
+.code{
+  background:#0c1118;border:1px solid var(--line);border-radius:8px;padding:12px 14px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+  color:#b8c6d6;white-space:pre;overflow-x:auto;margin:10px 0;
+}
+.seq{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;font-family:ui-monospace,monospace;font-size:12px}
+.seq div{background:#0f151e;border:1px solid var(--line);border-radius:6px;padding:6px 8px;text-align:center}
+.seq .h{color:var(--acc)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--mut);margin:8px 2px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+ul.tight{margin:8px 0;padding-left:20px}ul.tight li{margin:4px 0}
+.formula{background:#0f151e;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13.5px;margin:10px 0;font-family:ui-monospace,monospace}
+footer{color:#66748a;font-size:12px;text-align:center;margin-top:26px}
+.pill{font-size:11.5px;color:var(--mut)}
+.kv{font-size:13px;color:var(--mut)}
+.kv b{color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="badge">● 数学教学工具 · 不连接任何博彩平台 · 无预测功能</div>
+  <h1>老虎机 <span class="gold">RNG 原理</span>与概率演示</h1>
+  <p class="sub">通过可复现的随机数实验，看清三件事：旋转结果怎么产生、免费游戏的间隔服从什么分布、为什么任何"触发时间预测器"都不可能有效。</p>
+  <div class="warn">本工具中的麻将牌面仅为视觉装饰，模拟基于公开的概率模型，与任何具体游戏及其内部参数无关。<b>网络赌博在中国大陆属于违法行为，兜售"爆分/触发预测软件"是常见诈骗。</b></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-t="t1">① RNG 原理</button>
+  <button class="tab" data-t="t2">② 免费游戏间隔模拟</button>
+  <button class="tab" data-t="t3">③ 预测策略对决</button>
+  <button class="tab" data-t="t4">④ RTP 与波动</button>
+</nav>
+
+<!-- ================= TAB 1 ================= -->
+<section class="panel active" id="t1">
+  <h2>① RNG（随机数生成器）是怎么工作的</h2>
+  <p class="muted">正规老虎机每次旋转在你点击的瞬间向 RNG 取一个（或一组）随机数，服务器端据此确定结果。旋转动画只是"开奖结果"的播放过程，不影响结果。</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3 style="margin-top:0">A. 伪随机数（PRNG）：种子决定一切</h3>
+      <p class="muted">游戏程序常用确定性算法（如下面的 mulberry32）。同样的种子，必然产生同样的序列——所以种子必须由系统安全熵（时间、硬件噪声等）注入，玩家无法从外部观察到。</p>
+      <div class="code">function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296; // [0,1)
+  }
+}</div>
+      <div class="controls">
+        <label class="ctl">种子 <input type="number" id="seedA" value="20260108" style="width:120px"></label>
+        <button class="btn tiny" id="btnSeedA">生成序列 A</button>
+        <button class="btn tiny" id="btnSeedCopy">用相同种子生成 B</button>
+        <button class="btn tiny" id="btnSeedRand">B 换随机种子</button>
+      </div>
+      <div class="grid g2">
+        <div>
+          <div class="kv" style="margin-bottom:6px">序列 <b>A</b> <span class="pill" id="seedALbl"></span></div>
+          <div class="seq" id="seqA"></div>
+        </div>
+        <div>
+          <div class="kv" style="margin-bottom:6px">序列 <b>B</b> <span class="pill" id="seedBLbl"></span></div>
+          <div class="seq" id="seqB"></div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:10px">观察：相同种子 → 两列逐位相同（确定性）；不同种子 → 毫无关系。真实平台通常使用加密安全随机源（CSPRNG）或服务器种子+哈希承诺方案，客户端历史记录<b>无法反推种子</b>。</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">B. 一个 [0,1) 随机数如何变成牌面</h3>
+      <p class="muted">转轮条带上每个符号有权重。把权重累加起来划分区间，随机数落进哪个区间，就开出哪个符号——这叫"加权抽样 / 虚拟转轮"。</p>
+      <div class="controls">
+        <button class="btn primary" id="btnMapSpin">取随机数，开一次（三列转轮）</button>
+      </div>
+      <div class="reels" id="mapReels">
+        <div class="tile" id="mt0">?</div>
+        <div class="tile" id="mt1">?</div>
+        <div class="tile" id="mt2">?</div>
+      </div>
+      <div id="mapBars"></div>
+      <div class="muted" id="mapInfo">点击按钮后，这里会显示三列各自取到的 u 值、落点区间与选中符号。</div>
+      <div class="formula">区间划分：[0, w₁) , [w₁, w₁+w₂) , … ， Σwᵢ = 100</div>
+      <p class="muted">免费游戏（Scatter）触发则是另一个独立的随机判定：u &lt; p 即触发，与转轮上看到了什么、上一局结果如何，全都无关。</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">为什么"看记录预测"在数学上不成立</h3>
+    <ul class="tight muted">
+      <li><b style="color:var(--fg)">独立性：</b>每次旋转是独立抽取，过去的序列不含未来的信息（熵不来自历史）。</li>
+      <li><b style="color:var(--fg)">无记忆性：</b>已经连续 100 次没触发，不会让第 101 次"更该出"——它的概率还是 p。</li>
+      <li><b style="color:var(--fg)">状态不可见：</b>PRNG 的内部状态/种子在服务器端，你拿到的几百个开奖结果不足以重建状态（对 CSPRNG 而言，即使拿到海量输出也无法预测）。</li>
+      <li><b style="color:var(--fg)">小样本错觉：</b>"连出 3 次""很久没出"在百万次尺度上天天发生，不是规律，是几何分布的正常现象。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= TAB 2 ================= -->
+<section class="panel" id="t2">
+  <h2>② 免费游戏触发间隔 = 几何分布</h2>
+  <p class="muted">设每次旋转触发免费游戏的概率为 p（厂商只承诺长期均值，不承诺节奏）。相邻两次触发之间的间隔 G（中间隔了多少局）服从几何分布：</p>
+  <div class="formula">P(G = g) = (1−p)<sup>g</sup> · p　　E[G] = (1−p)/p　　P(G &gt; m+n | G &gt; m) = P(G &gt; n)　<span class="muted">← 无记忆性</span></div>
+
+  <div class="controls">
+    <label class="ctl">触发概率 p = 1 /
+      <input type="number" id="pDen" value="100" min="2" max="100000" style="width:90px"> 局
+    </label>
+    <select id="pPreset">
+      <option value="">快捷选择…</option>
+      <option value="50">1 / 50</option>
+      <option value="100" selected>1 / 100</option>
+      <option value="200">1 / 200</option>
+      <option value="500">1 / 500</option>
+      <option value="1000">1 / 1000</option>
+      <option value="2000">1 / 2000</option>
+    </select>
+    <span class="pill" id="pShow"></span>
+    <span style="flex:1"></span>
+    <button class="btn tiny" id="btnReset">重置数据</button>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="btnSpin">手动转一局</button>
+    <button class="btn" data-n="1000">连转 1 千局</button>
+    <button class="btn" data-n="10000">1 万局</button>
+    <button class="btn" data-n="100000">10 万局</button>
+    <button class="btn" data-n="1000000">100 万局</button>
+  </div>
+
+  <div class="reels">
+    <div class="tile" id="s0">–</div><div class="tile" id="s1">–</div><div class="tile" id="s2">–</div>
+  </div>
+  <div class="fs-msg" id="fsMsg">点击“手动转一局”或批量连转开始实验</div>
+
+  <div class="grid g4" style="margin-top:14px">
+    <div class="card stat"><div class="num" id="stRuns">0</div><div class="lbl">累计旋转局数</div></div>
+    <div class="card stat"><div class="num gold" id="stTrig">0</div><div class="lbl">免费游戏触发次数</div></div>
+    <div class="card stat"><div class="num green" id="stFreq">–</div><div class="lbl">实测触发频率</div><div class="th">理论 p 见左侧设置</div></div>
+    <div class="card stat"><div class="num red" id="stGap">0</div><div class="lbl">当前连续未触发</div></div>
+    <div class="card stat"><div class="num" id="stMean">–</div><div class="lbl">实测平均间隔</div><div class="th" id="thMean">理论 –</div></div>
+    <div class="card stat"><div class="num" id="stMin">–</div><div class="lbl">最短间隔</div></div>
+    <div class="card stat"><div class="num" id="stMax">–</div><div class="lbl">最长间隔（大冷周期）</div></div>
+    <div class="card stat"><div class="num blue" id="stSeed">–</div><div class="lbl">本次模拟 PRNG 种子</div></div>
+  </div>
+
+  <h3>图 1：触发间隔分布 —— 实测柱状 vs 理论几何分布曲线</h3>
+  <div class="cv-box hist"><canvas id="cvHist"></canvas></div>
+  <div class="legend">
+    <span><i class="dot" style="background:#3ddc97"></i>实测各间隔出现频率</span>
+    <span><i class="dot" style="background:#e9b53b"></i>理论 P(G=g)=(1−p)ᵍp</span>
+  </div>
+  <p class="muted">跑得越多，柱顶越贴合金色曲线。间隔为 0（连局触发）其实最常见，长尾又足够长——所以"刚出过不会再出"和"冷久必出"都是错觉。</p>
+
+  <h3>图 2：无记忆性验证 —— 已等待 g 局后，下一局触发的条件概率</h3>
+  <div class="cv-box cond"><canvas id="cvCond"></canvas></div>
+  <div class="legend">
+    <span><i class="dot" style="background:#5aa9ff"></i>实测 P(下一局触发 | 已连空 g 局)</span>
+    <span><i class="dot" style="background:#ff6b6b"></i>理论恒等于 p（水平线）</span>
+    <span class="pill">（柱体仅在该等待长度样本量 ≥ 30 时绘制，避免小样本噪声）</span>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h3 style="margin-top:0">“再等 N 局”能等到的概率</h3>
+      <table id="waitTable">
+        <thead><tr><th>再等待局数 N</th><th>至少触发一次的概率</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="muted">P(≤N 内触发) = 1−(1−p)<sup>N</sup>。即使等到平均间隔的 3 倍时长，仍有约 5% 的人什么都没等到——这不是被针对。</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">怎么读这张实验结果</h3>
+      <ul class="tight muted">
+        <li>平均间隔 ≈ (1−p)/p，但<b style="color:var(--fg)">个别间隔可以是均值的 5～10 倍</b>，这是几何分布的固有形状。</li>
+        <li>图 2 的蓝柱始终贴着红色水平线 p 上下抖动：<b style="color:var(--fg)">已经等了多久，对下一局毫无加成</b>。</li>
+        <li>100 万局只需要普通浏览器几秒算完——厂商服务器每秒处理的旋转量比这大几个数量级，任何"冷热规律"都会被规模轻松制造出来。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TAB 3 ================= -->
+<section class="panel" id="t3">
+  <h2>③ “预测策略”对决：命中率永远 = p</h2>
+  <p class="muted">用第②页设定的 p，模拟 10 万局旋转，让 5 种典型“预测方法”在同一份随机序列上押注“下一局会触发免费游戏”。重点看<b>命中率（精确率）</b>：它衡量“当策略说要出时，真的出的比例”。</p>
+  <div class="controls">
+    <label class="ctl">冷号阈值 k：已连空 ≥ <input type="number" id="pk" value="100" style="width:90px"> 局才押</label>
+    <label class="ctl">周期法周期 T = <input type="number" id="pT" value="100" style="width:90px"> 局</label>
+    <button class="btn primary" id="btnPred">开始 10 万局对决</button>
+    <span class="pill" id="predInfo"></span>
+  </div>
+  <div class="cv-box" style="height:auto;padding:0;border:none;background:none">
+    <table id="predTable">
+      <thead><tr>
+        <th>策略</th><th>预测次数</th><th>命中次数</th><th>命中率（精确率）</th><th>覆盖率</th><th>总正确率</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="warn" style="margin-top:14px">
+    无论采用哪种策略——<b>每次都押、连冷后押、刚出过才押、按固定周期押、掷硬币押</b>——“预测会触发”时的真实命中率都在 p 附近波动，统计上没有任何一种能稳定跑赢 p。差异只在于你押得勤不勤（覆盖率），不在于你猜得准不准。
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <h3 style="margin-top:0">卖“预测软件”的人靠什么让你相信它有效</h3>
+      <ul class="tight muted">
+        <li><b style="color:var(--fg)">幸存者截图：</b>几何分布下“连冷后恰好出”的样本天然大量存在，只晒赢的那批即可。</li>
+        <li><b style="color:var(--fg)">模糊话术：</b>“即将进入放分周期”不可证伪，出了归功、不出继续等。</li>
+        <li><b style="color:var(--fg)">合谋收费：</b>软件费 + 代理返水，你的亏损就是对方的收入。</li>
+        <li>本页实验可以反复点，换种子、换 p、换阈值，结论不变。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">一个判别问题</h3>
+      <p class="muted">如果真有人能提前知道免费游戏何时触发，他为什么要把一台印钞机按月租卖给你，而不是自己默默使用？因为软件本身一文不值，<b style="color:var(--fg)">你的订阅费才是他的收益</b>。</p>
+      <p class="muted">在数学上，能稳定把命中率从 p 提高到 p+ε，意味着你掌握了 RNG 的内部状态——那不是“预测”，而是入侵服务器或破解 CSPRNG，属于刑事犯罪，且正规平台的审计与风控会立刻发现异常。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TAB 4 ================= -->
+<section class="panel" id="t4">
+  <h2>④ RTP、期望值与波动：长期必负，短期看运气</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3 style="margin-top:0">简化赔付模型（每局下注 1）</h3>
+      <table>
+        <thead><tr><th>结果</th><th>概率</th><th>赔付 x</th><th>贡献 = 概率×x</th></tr></thead>
+        <tbody>
+          <tr><td>普通连线奖（小）</td><td>10%</td><td>1</td><td>0.10</td></tr>
+          <tr><td>普通连线奖（中）</td><td>1%</td><td>5</td><td>0.05</td></tr>
+          <tr><td>普通连线奖（大）</td><td>0.1%</td><td>20</td><td>0.02</td></tr>
+          <tr><td>巨奖</td><td>0.01%</td><td>100</td><td>0.01</td></tr>
+          <tr><td>触发免费游戏 <span class="pill">(概率 = p)</span></td><td id="rtpProbP">1.00%</td><td>78（免费局平均总赔付）</td><td id="rtpBonus">0.78</td></tr>
+        </tbody>
+      </table>
+      <div class="formula">理论 RTP = 0.18 + p × 78 = <b class="gold" id="rtpVal">0.96</b>（即每局期望收益率 <b class="red" id="rtpHouse">−4%</b>）</div>
+      <p class="muted">这是教学用的任意模型：真实游戏的条带、赔付表、免费局机制各不相同，但数学结构相同——RTP&lt;100%，玩得越久，亏损接近期望值。</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">模拟 25 个玩家，每人 3000 局</h3>
+      <div class="controls">
+        <button class="btn primary" id="btnRtp">开始模拟（75,000 局）</button>
+      </div>
+      <div class="grid g3" style="margin-top:6px">
+        <div class="stat card"><div class="num" id="rtpWin">–</div><div class="lbl">最终盈利人数</div></div>
+        <div class="stat card"><div class="num" id="rtpMean">–</div><div class="lbl">群体实测 RTP</div></div>
+        <div class="stat card"><div class="num" id="rtpRange">–</div><div class="lbl">最好 / 最差余额</div></div>
+      </div>
+      <p class="muted">初始余额 1000，每局下注 1。线条是每个人的余额轨迹，粗金线是全体平均。</p>
+    </div>
+  </div>
+  <h3>图 3：25 条玩家余额轨迹 vs 群体均值</h3>
+  <div class="cv-box rtp"><canvas id="cvRtp"></canvas></div>
+  <p class="muted">个体轨迹剧烈分化（波动/方差），有人看似找到了“打法”，但均值金线稳定向下（负期望）。赌场不需要预测任何人，它只靠大数定律和下注上限稳稳盈利。</p>
+  <ul class="tight muted">
+    <li><b style="color:var(--fg)">RTP 是长期均值，不是保底：</b>它在数百万、数十亿局的尺度上收敛，3000 局内偏差可以非常大。</li>
+    <li><b style="color:var(--fg)">“免费游戏价值”已计入 RTP：</b>它不是恩惠，是把一部分赔付打包成波动更大的事件，更容易被截图传播。</li>
+  </ul>
+</section>
+
+<footer>本页面为纯前端静态文件，所有计算在你的浏览器本地完成，不发送任何网络请求。仅供概率与统计教学使用。</footer>
+</div>
+
+<script>
+"use strict";
+/* ---------------- tabs ---------------- */
+const tabs = document.querySelectorAll('.tab');
+const panels = {t1:document.getElementById('t1'),t2:document.getElementById('t2'),t3:document.getElementById('t3'),t4:document.getElementById('t4')};
+tabs.forEach(b=>b.addEventListener('click',()=>{
+  tabs.forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  Object.entries(panels).forEach(([k,el])=>el.classList.toggle('active',k===b.dataset.t));
+  drawAll();
+}));
+
+/* ---------------- PRNG ---------------- */
+function mulberry32(a){return function(){
+  a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;
+  return((t^t>>>14)>>>0)/4294967296;
+};}
+function randSeed(){return (crypto.getRandomValues?Array.from(crypto.getRandomValues(new Uint32Array(1)))[0]:Math.floor(Math.random()*4e9))>>>0;}
+
+/* ---------------- TAB 1 : PRNG streams ---------------- */
+function streamOf(seed,n=24){const r=mulberry32(seed);return Array.from({length:n},()=>r());}
+function renderSeq(el,vals){
+  el.innerHTML=vals.map((v,i)=>'<div class="'+(i===0?'h':'')+'">'+v.toFixed(6)+'</div>').join('');
+}
+let seedA=20260108, seedB=20260108;
+function refreshStreams(){
+  renderSeq(document.getElementById('seqA'),streamOf(seedA));
+  renderSeq(document.getElementById('seqB'),streamOf(seedB));
+  document.getElementById('seedALbl').textContent='seed = '+seedA;
+  document.getElementById('seedBLbl').textContent='seed = '+seedB;
+}
+document.getElementById('btnSeedA').onclick=()=>{seedA=(document.getElementById('seedA').value|0)>>>0;seedB=seedA;refreshStreams();};
+document.getElementById('btnSeedCopy').onclick=()=>{seedB=seedA;refreshStreams();};
+document.getElementById('btnSeedRand').onclick=()=>{seedB=randSeed();refreshStreams();};
+refreshStreams();
+
+/* weighted reel */
+const SYMBOLS=[
+  {ch:'🀇',w:28},{ch:'🀈',w:22},{ch:'🀉',w:17},{ch:'🀊',w:13},
+  {ch:'🀋',w:9},{ch:'🀀',w:6},{ch:'🀄',w:3},{ch:'🀅',w:2}
+];
+const TOTW=SYMBOLS.reduce((s,x)=>s+x.w,0);
+const SEG_COLORS=['#3b6ea5','#4d7f52','#a5873b','#8a4d72','#5b8a8a','#7a6aa5','#b5552f','#8f8f8f'];
+let mapRng=mulberry32(seedA);
+document.getElementById('mapBars').innerHTML=[0,1,2].map(i=>'<div class="cv-box bar" style="margin:8px 0"><canvas id="cvBar'+i+'"></canvas></div>').join('');
+function pickIndex(u){let acc=0;for(let i=0;i<SYMBOLS.length;i++){acc+=SYMBOLS[i].w/TOTW;if(u<acc)return i;}return SYMBOLS.length-1;}
+function drawWeightBar(cv,u){
+  const dpr=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext('2d');
+  x.setTransform(1,0,0,1,0,0);x.scale(dpr,dpr);
+  let acc=0;
+  SYMBOLS.forEach((s,i)=>{
+    const x0=acc/TOTW*w, sw=s.w/TOTW*w;
+    x.fillStyle=SEG_COLORS[i];x.fillRect(x0,0,sw,h);
+    x.fillStyle='rgba(0,0,0,.55)';
+    if(sw>26)x.fillText(s.ch,x0+6,h/2+4);
+    acc+=s.w;
+  });
+  // marker
+  const mx=u*w;
+  x.strokeStyle='#fff';x.lineWidth=2;
+  x.beginPath();x.moveTo(mx,0);x.lineTo(mx,h);x.stroke();
+  x.fillStyle='#fff';
+  x.beginPath();x.moveTo(mx-5,2);x.lineTo(mx+5,2);x.lineTo(mx,9);x.closePath();x.fill();
+}
+document.getElementById('btnMapSpin').onclick=()=>{
+  const us=[mapRng(),mapRng(),mapRng()];
+  const info=[];
+  us.forEach((u,i)=>{
+    const idx=pickIndex(u);
+    document.getElementById('mt'+i).textContent=SYMBOLS[idx].ch;
+    drawWeightBar(document.getElementById('cvBar'+i),u);
+    info.push('第'+(i+1)+'列：u='+u.toFixed(4)+' → '+SYMBOLS[idx].ch+'（权重 '+SYMBOLS[idx].w+'）');
+  });
+  document.getElementById('mapInfo').innerHTML=info.join('　｜　')+'<br>每次点击都从同一条 PRNG 序列往后取数；改成固定种子，连“手气”都能逐局复现。';
+};
+
+/* ---------------- TAB 2 : geometric simulation ---------------- */
+const CAP=16000;
+const sim={p:.01,runs:0,trig:0,gap:0,sumGap:0,minGap:null,maxGap:0,
+  gh:new Uint32Array(CAP),risk:new Uint32Array(CAP),hit:new Uint32Array(CAP),
+  running:false,seed:0,rng:null};
+const TILES_SPIN=['🀇','🀈','🀉','🀊','🀋','🀀','🀄'];
+function getP(){return 1/Math.max(2,parseFloat(document.getElementById('pDen').value)||100);}
+function resetSim(){
+  sim.p=getP();sim.runs=0;sim.trig=0;sim.gap=0;sim.sumGap=0;sim.minGap=null;sim.maxGap=0;
+  sim.gh.fill(0);sim.risk.fill(0);sim.hit.fill(0);
+  sim.seed=randSeed();sim.rng=mulberry32(sim.seed);
+  renderStats();drawAll();
+}
+function spinOnce(){
+  sim.runs++;
+  const g=Math.min(sim.gap,CAP-1);
+  sim.risk[g]++;
+  const t=sim.rng()<sim.p;
+  if(t){
+    sim.lastGap=sim.gap;
+    sim.hit[g]++;sim.gh[g]++;sim.sumGap+=sim.gap;
+    if(sim.minGap===null||sim.gap<sim.minGap)sim.minGap=sim.gap;
+    if(sim.gap>sim.maxGap)sim.maxGap=sim.gap;
+    sim.trig++;sim.gap=0;
+  }else sim.gap++;
+  return t;
+}
+function setBtns(on){document.querySelectorAll('#t2 button').forEach(b=>b.disabled=on);}
+function runBatch(total){
+  if(sim.running)return;sim.running=true;setBtns(true);
+  const target=sim.runs+total, per=Math.max(2000,Math.ceil(total/40));
+  (function loop(){
+    const n=Math.min(per,target-sim.runs);
+    for(let i=0;i<n;i++)spinOnce();
+    renderStats();drawAll();
+    if(sim.runs<target)requestAnimationFrame(loop);
+    else{sim.running=false;setBtns(false);}
+  })();
+}
+document.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>runBatch(parseInt(b.dataset.n,10)));
+document.getElementById('btnReset').onclick=resetSim;
+document.getElementById('pDen').addEventListener('change',resetSim);
+document.getElementById('pPreset').addEventListener('change',e=>{
+  if(e.target.value){document.getElementById('pDen').value=e.target.value;resetSim();}
+});
+
+/* manual spin */
+let anim=null;
+document.getElementById('btnSpin').onclick=()=>{
+  if(sim.running)return;
+  const cells=[0,1,2].map(i=>document.getElementById('s'+i)) ;
+  cells.forEach(c=>{c.classList.add('spin');c.classList.remove('scatter');});
+  document.getElementById('fsMsg').textContent='旋转中…';
+  clearInterval(anim);
+  let ticks=0;
+  anim=setInterval(()=>{
+    cells.forEach(c=>c.textContent=TILES_SPIN[Math.floor(sim.rng()*TILES_SPIN.length)]);
+    if(++ticks>=8){
+      clearInterval(anim);
+      const t=spinOnce();
+      cells.forEach(c=>c.classList.remove('spin'));
+      if(t){
+        cells.forEach(c=>{c.textContent='🀅';c.classList.add('scatter');});
+        document.getElementById('fsMsg').innerHTML='🎉 触发免费游戏！上一段间隔 = '+sim.lastGap+' 局（理论平均 '+(1-sim.p)/sim.p+' 局）';
+      }else{
+        cells.forEach((c,i)=>c.textContent=TILES_SPIN[Math.floor(sim.rng()*TILES_SPIN.length)]);
+        document.getElementById('fsMsg').textContent='未触发，当前已连空 '+sim.gap+' 局——下一局概率仍是 p，不会升高';
+      }
+      renderStats();drawAll();
+    }
+  },90);
+};
+
+/* stats */
+function fmt(n){return n.toLocaleString('zh-CN');}
+function renderStats(){
+  const p=sim.p;
+  document.getElementById('stRuns').textContent=fmt(sim.runs);
+  document.getElementById('stTrig').textContent=fmt(sim.trig);
+  document.getElementById('stFreq').textContent=sim.runs?(sim.trig/sim.runs).toFixed(5):'–';
+  document.getElementById('stGap').textContent=fmt(sim.gap);
+  document.getElementById('stMean').textContent=sim.trig?(sim.sumGap/sim.trig).toFixed(1):'–';
+  document.getElementById('thMean').textContent='理论 '+(1-p)/p;
+  document.getElementById('stMin').textContent=sim.minGap===null?'–':fmt(sim.minGap);
+  document.getElementById('stMax').textContent=sim.trig?fmt(sim.maxGap):'–';
+  document.getElementById('stSeed').textContent=sim.seed;
+  document.getElementById('pShow').textContent='p = '+p.toFixed(6)+'，平均间隔 '+(1-p)/p+' 局';
+  // wait table
+  const mults=[[1,1/p],[2,2/p],[3,3/p],[5,5/p]].map(([k,v])=>[k,Math.round(v)]);
+  document.querySelector('#waitTable tbody').innerHTML=mults.map(([k,N])=>{
+    const q=1-Math.pow(1-p,N);
+    return '<tr><td>'+k+' 倍平均间隔（'+fmt(N)+' 局）</td><td>'+(q*100).toFixed(2)+'%</td></tr>';
+  }).join('');
+  // rtp tab p-dependent labels
+  document.getElementById('rtpProbP').textContent=(p*100).toFixed(2)+'%';
+  document.getElementById('rtpBonus').textContent=(p*78).toFixed(3);
+  const rtp=.18+p*78;
+  document.getElementById('rtpVal').textContent=rtp.toFixed(3);
+  document.getElementById('rtpHouse').textContent=(rtp-1<0?'−':'')+Math.abs((rtp-1)*100).toFixed(2)+'%';
+}
+
+/* ---------------- charts ---------------- */
+function prep(cv){
+  const dpr=window.devicePixelRatio||1,w=cv.clientWidth||300,h=cv.clientHeight||150;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  const x=cv.getContext('2d');
+  x.setTransform(1,0,0,1,0,0);
+  x.scale(dpr,dpr);
+  x.clearRect(0,0,w,h);return {x,w,h};
+}
+function axes(x,w,h,pad){
+  x.strokeStyle='#2b3442';x.lineWidth=1;x.beginPath();
+  x.moveTo(pad.l,8);x.lineTo(pad.l,h-pad.b);x.lineTo(w-8,h-pad.b);x.stroke();
+}
+function drawHist(){
+  const cv=document.getElementById('cvHist');if(!cv.offsetParent)return;
+  const {x,w,h}=prep(cv),pad={l:54,b:34,t:10,r:10};
+  const p=sim.p;
+  let xMax=Math.min(CAP-1,Math.max(10,Math.ceil(Math.log(0.002)/Math.log(1-p))));
+  axes(x,w,h,pad);
+  let maxY=p*1.15;
+  const pw=(w-pad.l-pad.r)/ (xMax+1);
+  // bars
+  x.fillStyle='#3ddc97';
+  for(let g=0;g<=xMax;g++){
+    const f=sim.trig?sim.gh[g]/sim.trig:0;
+    const bh=(f/maxY)*(h-pad.b-pad.t);
+    if(bh>0)x.fillRect(pad.l+g*pw+pw*0.15,h-pad.b-bh,Math.max(1,pw*0.7),bh);
+  }
+  // theory line
+  x.strokeStyle='#e9b53b';x.lineWidth=2;x.beginPath();
+  for(let g=0;g<=xMax;g++){
+    const f=Math.pow(1-p,g)*p;
+    const px=pad.l+(g+0.5)*pw, py=h-pad.b-(f/maxY)*(h-pad.b-pad.t);
+    g===0?x.moveTo(px,py):x.lineTo(px,py);
+  }
+  x.stroke();
+  // gridlines + y labels
+  x.fillStyle='#94a2b3';x.font='11px sans-serif';x.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const yy=h-pad.b-(i/4)*(h-pad.b-pad.t);
+    x.strokeStyle='#1c2430';x.beginPath();x.moveTo(pad.l,yy);x.lineTo(w-8,yy);x.stroke();
+    x.fillText((maxY*i/4*100).toFixed(2)+'%',pad.l-6,yy+3);
+  }
+  // x labels
+  x.textAlign='center';
+  const ticks=6;
+  for(let i=0;i<=ticks;i++){
+    const g=Math.round(xMax*i/ticks);
+    x.fillText(g,pad.l+g*pw+pw/2,h-pad.b+16);
+  }
+  x.fillText('两次触发之间的间隔 G（局数）',(w+pad.l)/2,h-4);
+}
+function drawCond(){
+  const cv=document.getElementById('cvCond');if(!cv.offsetParent)return;
+  const {x,w,h}=prep(cv),pad={l:54,b:34,t:10,r:10};
+  const p=sim.p;
+  let xMax=Math.min(CAP-1,Math.max(10,Math.ceil(Math.log(0.002)/Math.log(1-p))));
+  axes(x,w,h,pad);
+  const maxY=Math.max(p*2.5,0.005);
+  const pw=(w-pad.l-pad.r)/(xMax+1);
+  x.fillStyle='#5aa9ff';
+  for(let g=0;g<=xMax;g++){
+    if(sim.risk[g]<30)continue;
+    const r=sim.hit[g]/sim.risk[g];
+    const bh=(r/maxY)*(h-pad.b-pad.t);
+    x.fillRect(pad.l+g*pw+pw*0.15,h-pad.b-bh,Math.max(1,pw*0.7),bh);
+  }
+  // p reference
+  const py=h-pad.b-(p/maxY)*(h-pad.b-pad.t);
+  x.strokeStyle='#ff6b6b';x.setLineDash([6,4]);x.lineWidth=2;
+  x.beginPath();x.moveTo(pad.l,py);x.lineTo(w-8,py);x.stroke();x.setLineDash([]);
+  x.fillStyle='#ff6b6b';x.font='11px sans-serif';x.textAlign='left';
+  x.fillText('p = '+(p*100).toFixed(2)+'%',pad.l+6,py-5);
+  x.fillStyle='#94a2b3';x.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const yy=h-pad.b-(i/4)*(h-pad.b-pad.t);
+    x.fillText((maxY*i/4*100).toFixed(2)+'%',pad.l-6,yy+3);
+  }
+  x.textAlign='center';
+  const ticks=6;
+  for(let i=0;i<=ticks;i++){
+    const g=Math.round(xMax*i/ticks);
+    x.fillText(g,pad.l+g*pw+pw/2,h-pad.b+16);
+  }
+  x.fillText('当前已连续未触发的局数 g',(w+pad.l)/2,h-4);
+}
+function drawAll(){
+  if(panels.t2.classList.contains('active')){drawHist();drawCond();}
+  if(panels.t4.classList.contains('active')&&rtpData)drawRtp();
+}
+window.addEventListener('resize',drawAll);
+
+/* ---------------- TAB 3 : predictor duel ---------------- */
+document.getElementById('pk').value=100;
+function syncPredDefaults(){
+  const m=Math.round(1/getP());
+  document.getElementById('pk').value=m;
+  document.getElementById('pT').value=m;
+}
+document.getElementById('pDen').addEventListener('change',syncPredDefaults);
+
+function runPrediction(){
+  const N=100000,p=getP(),k=parseInt(document.getElementById('pk').value,10)||100,
+        T=Math.max(1,parseInt(document.getElementById('pT').value,10)||100);
+  const rng=mulberry32(777);
+  const strats=[
+    {name:'① 每次都押（基准）',fn:()=>true,rnd:false},
+    {name:'② 掷硬币：以概率 p 乱猜',fn:()=>rng()<p,rnd:true},
+    {name:'③ 冷号策略：连空 ≥ '+k+' 局才押',fn:c=>c.gap>=k,rnd:false},
+    {name:'④ 热号策略：近 '+k+' 局内出过才押',fn:c=>c.gap<k,rnd:false},
+    {name:'⑤ 周期法：每隔 '+T+' 局押一次',fn:c=>c.i%T===0,rnd:false}
+  ];
+  const M=strats.map(()=>({pred:0,hit:0,correct:0}));
+  let gap=0,trigTotal=0;
+  for(let i=0;i<N;i++){
+    const t=rng()<p;if(t)trigTotal++;
+    const ctx={gap,i};
+    strats.forEach((s,j)=>{
+      const y=s.fn(ctx);
+      if(y){M[j].pred++;if(t)M[j].hit++;}
+      if(y===t)M[j].correct++;
+    });
+    gap=t?0:gap+1;
+  }
+  document.querySelector('#predTable tbody').innerHTML=strats.map((s,j)=>{
+    const m=M[j];
+    const prec=m.pred?m.hit/m.pred:0, cov=m.pred/N, acc=m.correct/N;
+    return '<tr><td>'+s.name+'</td><td>'+fmt(m.pred)+'</td><td>'+fmt(m.hit)+'</td>'+
+      '<td><b class="red">'+(prec*100).toFixed(2)+'%</b></td><td>'+(cov*100).toFixed(1)+'%</td><td>'+(acc*100).toFixed(1)+'%</td></tr>';
+  }).join('');
+  document.getElementById('predInfo').textContent=
+    '共 '+fmt(N)+' 局，真实触发 '+fmt(trigTotal)+' 次，基础概率 p = '+(p*100).toFixed(2)+'%。所有策略的命中率都围绕 p 波动。';
+}
+document.getElementById('btnPred').onclick=runPrediction;
+
+/* ---------------- TAB 4 : RTP simulation ---------------- */
+const TIERS=[[1,.10],[5,.01],[20,.001],[100,.0001]];
+function payout(rng,p){
+  let r=rng();
+  if(r<p)return 78;r-=p;
+  for(const [x,q] of TIERS){if(r<q)return x;r-=q;}
+  return 0;
+}
+let rtpData=null;
+function runRtp(){
+  const players=25,spins=3000,start=1000,p=getP();
+  const rng=mulberry32(424242);
+  const step=10,nPts=Math.floor(spins/step)+1;
+  const paths=[];let finals=[];
+  for(let pl=0;pl<players;pl++){
+    let bal=start;const path=[start];
+    for(let i=1;i<=spins;i++){bal+=payout(rng,p)-1;if(i%step===0)path.push(bal);}
+    paths.push(path);finals.push(bal);
+  }
+  const mean=[];
+  for(let j=0;j<nPts;j++){let s=0;for(let i=0;i<players;i++)s+=paths[i][j];mean.push(s/players);}
+  rtpData={paths,mean,start,spins,step,nPts,finals,p};
+  const totalBet=players*spins, totalRet=finals.reduce((a,b)=>a+b,0)-players*start+totalBet;
+  document.getElementById('rtpWin').textContent=finals.filter(b=>b>start).length+' / '+players;
+  document.getElementById('rtpMean').textContent=(totalRet/totalBet*100).toFixed(2)+'%';
+  document.getElementById('rtpRange').textContent=Math.round(Math.max(...finals))+' / '+Math.round(Math.min(...finals));
+  drawRtp();
+}
+function drawRtp(){
+  const cv=document.getElementById('cvRtp');if(!cv.offsetParent||!rtpData)return;
+  const {x,w,h}=prep(cv),pad={l:54,b:34,t:12,r:12};
+  const d=rtpData;
+  let lo=Infinity,hi=-Infinity;
+  d.paths.forEach(pa=>pa.forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);}));
+  lo=Math.min(lo,0);hi=Math.max(hi,d.start);
+  const X=i=>pad.l+i/(d.nPts-1)*(w-pad.l-pad.r);
+  const Y=v=>h-pad.b-(v-lo)/(hi-lo)*(h-pad.b-pad.t);
+  // grid
+  x.fillStyle='#94a2b3';x.font='11px sans-serif';x.textAlign='right';
+  for(let i=0;i<=5;i++){
+    const v=lo+(hi-lo)*i/5,yy=Y(v);
+    x.strokeStyle='#1c2430';x.beginPath();x.moveTo(pad.l,yy);x.lineTo(w-8,yy);x.stroke();
+    x.fillText(Math.round(v),pad.l-6,yy+3);
+  }
+  // start line
+  x.strokeStyle='#3a4656';x.setLineDash([4,4]);
+  x.beginPath();x.moveTo(pad.l,Y(d.start));x.lineTo(w-8,Y(d.start));x.stroke();x.setLineDash([]);
+  // paths
+  d.paths.forEach(pa=>{
+    x.strokeStyle='rgba(90,169,255,.28)';x.lineWidth=1;x.beginPath();
+    pa.forEach((v,j)=>{j===0?x.moveTo(X(j),Y(v)):x.lineTo(X(j),Y(v));});x.stroke();
+  });
+  // mean
+  x.strokeStyle='#e9b53b';x.lineWidth=2.5;x.beginPath();
+  d.mean.forEach((v,j)=>{j===0?x.moveTo(X(j),Y(v)):x.lineTo(X(j),Y(v));});x.stroke();
+  // labels
+  x.textAlign='center';x.fillStyle='#94a2b3';
+  for(let i=0;i<=5;i++){x.fillText(Math.round(d.spins*i/5)+' 局',X(Math.round((d.nPts-1)*i/5)),h-pad.b+16);}
+  x.fillText('局数',(w+pad.l)/2,h-4);
+}
+document.getElementById('btnRtp').onclick=runRtp;
+
+/* ---------------- init ---------------- */
+syncPredDefaults();
+resetSim();
+</script>
+</body>
+</html>
