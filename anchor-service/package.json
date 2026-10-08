@@ -1,0 +1,14 @@
+{
+  "name": "tron-anchor-service",
+  "version": "1.0.0",
+  "description": "TRON 链上存证本地 HTTP 服务",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "tronweb": "^6.0.0"
+  }
+}
