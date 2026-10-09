@@ -1,0 +1,20 @@
+{
+  "name": "tron-memo-tx",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TRON 带 memo 测试交易：构造/离线签名/广播/确认分离脚本",
+  "main": "memo-tx.js",
+  "scripts": {
+    "balance": "node memo-tx.js balance --net nile",
+    "build": "node memo-tx.js build --net nile",
+    "sign": "node memo-tx.js sign",
+    "broadcast": "node memo-tx.js broadcast --net nile",
+    "wait": "node memo-tx.js wait --net nile",
+    "run": "node memo-tx.js run --net nile"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "tronweb": "^6.5.1"
+  }
+}
