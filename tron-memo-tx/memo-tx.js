@@ -26,6 +26,11 @@
  *   # 4) 轮询等待上链确认
  *   node memo-tx.js wait --net nile --id <txID>
  *
+ *   # 5) 按金额查询某地址的 TRX 流水（扫描历史，本地过滤；TRX 原生转账）
+ *   node memo-tx.js query --net nile --address Txxxx --amount 12.34
+ *   node memo-tx.js query --address Txxxx --min-trx 1 --max-trx 100 --direction out
+ *   node memo-tx.js query --address Txxxx --amount-sun 154 --memo-substr ANCHOR --json
+ *
  *   # 一步到位（在线热钱包模式，Nile 测试网）
  *   FROM_PRIVATE_KEY=0xyourkey node memo-tx.js run --net nile
  *
@@ -244,6 +249,122 @@ async function cmdWait(net, a) {
   throw new Error('超时未确认。请稍后用同一 txID 执行 wait 重查，切勿重新构造交易（避免重复转账）');
 }
 
+// query --net nile --address Txxx [--amount 12.34 | --amount-sun N | --min-trx/--max-trx]
+//       [--direction in|out|all] [--memo-substr s] [--limit 20] [--max-pages 20] [--json] [--full]
+async function cmdQuery(net, a) {
+  if (!a.address) throw new Error('需要 --address Txxxx');
+  const base58 = TronWeb.isAddress(a.address)
+    ? (a.address.startsWith('T') ? a.address : TronWeb.address.fromHex(a.address))
+    : null;
+  if (!base58) throw new Error('地址格式非法: ' + a.address);
+
+  // 金额条件（sun）：--amount(TRX 精确) | --amount-sun(精确) | --min-trx/--max-trx(范围)
+  let exactSun = null, minSun = null, maxSun = null;
+  if (a['amount-trx'] !== undefined) exactSun = Math.round(Number(a['amount-trx']) * 1e6);
+  else if (a['amount'] !== undefined && a['amount'] !== true) exactSun = Math.round(Number(a['amount']) * 1e6);
+  else if (a['amount-sun'] !== undefined) exactSun = Number(a['amount-sun']);
+  if (a['min-trx'] !== undefined) minSun = Math.round(Number(a['min-trx']) * 1e6);
+  if (a['max-trx'] !== undefined) maxSun = Math.round(Number(a['max-trx']) * 1e6);
+  if (a['min-sun'] !== undefined) minSun = Number(a['min-sun']);
+  if (a['max-sun'] !== undefined) maxSun = Number(a['max-sun']);
+  if (exactSun !== null && (!Number.isInteger(exactSun) || exactSun <= 0)) throw new Error('金额非法');
+  if (minSun !== null && maxSun !== null && minSun > maxSun) throw new Error('金额范围非法：min > max');
+
+  const direction = ['in', 'out', 'all'].includes(a.direction) ? a.direction : 'all';
+  const memoSub = a['memo-substr'] && a['memo-substr'] !== true ? String(a['memo-substr']) : null;
+  const want = Math.max(1, parseInt(a.limit || '20', 10));
+  const maxPages = Math.max(1, parseInt(a['max-pages'] || '20', 10));
+  const includeFailed = a['include-failed'] === true || a['include-failed'] === 'true';
+  const pageSize = 200;
+
+  const headers = { accept: 'application/json' };
+  if (process.env.TRONGRID_API_KEY) headers['TRON-PRO-API-KEY'] = process.env.TRONGRID_API_KEY;
+
+  const decodeMemo = (hex) => {
+    if (!hex) return '';
+    const buf = Buffer.from(hex, 'hex');
+    const s = buf.toString('utf8');
+    // 只保留常见可打印文本，二进制 memo 标记为 [binary N bytes]
+    return /^[\x09\x0a\x0d\x20-\x7e一-鿿　-〿＀-￯]*$/.test(s) && s.replace(/\s/g, '').length
+      ? s : `[binary ${buf.length} bytes]`;
+  };
+
+  const rows = [];
+  let fingerprint = null, scanned = 0, pages = 0;
+  while (pages < maxPages && rows.length < want) {
+    const q = new URLSearchParams({ limit: String(pageSize), only_confirmed: 'true', order_by: 'block_timestamp,desc' });
+    if (fingerprint) q.set('fingerprint', fingerprint);
+    const url = `${NETWORKS[net].host}/v1/accounts/${encodeURIComponent(base58)}/transactions?${q}`;
+
+    // 公共节点无 API key 时限流(429)/偶发 5xx：指数退避重试
+    let resp = null, j = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      resp = await fetch(url, { headers });
+      if (resp.ok || (resp.status !== 429 && resp.status < 500)) break;
+      if (attempt === 3) throw new Error(`TronGrid HTTP ${resp.status}：请求过于频繁，请稍后再试或设置 TRONGRID_API_KEY`);
+      await sleep(1500 * attempt);
+    }
+    if (!resp.ok) throw new Error(`TronGrid HTTP ${resp.status} ${resp.statusText}`);
+    j = await resp.json();
+    if (!j || j.success === false) throw new Error('TronGrid 返回错误: ' + JSON.stringify(j.error || j));
+    const data = Array.isArray(j.data) ? j.data : [];
+    pages++;
+    if (!data.length) break;
+
+    for (const tx of data) {
+      scanned++;
+      const contract = (tx.raw_data && tx.raw_data.contract || []).find((c) => c.type === 'TransferContract');
+      if (!contract) continue; // 只统计 TRX 原生转账；TRC20(USDT) 走另一个接口
+      const v = contract.parameter.value;
+      const success = (tx.ret && tx.ret[0] && tx.ret[0].contractRet === 'SUCCESS');
+      if (!includeFailed && !success) continue;
+      const owner = v.owner_address.startsWith('T') ? v.owner_address : TronWeb.address.fromHex(v.owner_address);
+      const to = v.to_address.startsWith('T') ? v.to_address : TronWeb.address.fromHex(v.to_address);
+      const amount = Number(v.amount);
+      const dir = owner === base58 ? 'out' : 'in';
+      if (direction !== 'all' && dir !== direction) continue;
+      if (exactSun !== null && amount !== exactSun) continue;
+      if (minSun !== null && amount < minSun) continue;
+      if (maxSun !== null && amount > maxSun) continue;
+      const memo = decodeMemo(tx.raw_data.data);
+      if (memoSub && !memo.includes(memoSub)) continue;
+
+      rows.push({
+        time: new Date(Number(tx.block_timestamp)).toISOString().replace('.000Z', 'Z'),
+        dir, counterparty: dir === 'out' ? to : owner,
+        amountSun: amount, amountTrx: amount / 1e6,
+        memo, success, txID: tx.txID,
+        explorer: NETWORKS[net].explorer + tx.txID,
+      });
+      if (rows.length >= want) break;
+    }
+    fingerprint = j.meta && j.meta.fingerprint;
+    if (!fingerprint) break;
+  }
+
+  if (a.json) {
+    console.log(JSON.stringify({ address: base58, net, scanned, pages, matches: rows }, null, 2));
+    return;
+  }
+  console.log('地址      :', base58, '| 网络:', net);
+  const cond = [];
+  if (exactSun !== null) cond.push('金额=' + exactSun / 1e6 + ' TRX');
+  if (minSun !== null || maxSun !== null) cond.push('范围=' + ((minSun ?? 0) / 1e6) + '~' + ((maxSun ?? Infinity) / 1e6) + ' TRX');
+  if (direction !== 'all') cond.push('方向=' + direction);
+  if (memoSub) cond.push('memo含"' + memoSub + '"');
+  console.log('条件      :', cond.join('，') || '全部 TRX 转账');
+  console.log(`扫描 ${scanned} 笔交易 / ${pages} 页，命中 ${rows.length} 笔${rows.length === want ? '（达到 --limit，可继续翻页）' : ''}`);
+  if (!rows.length) return;
+  for (const r of rows) {
+    const short = a.full ? r.txID : r.txID.slice(0, 16) + '…';
+    console.log('──────────────────────────────────────');
+    console.log(`${r.time}  ${r.dir === 'out' ? '支出 →' : '收入 ←'}  ${r.amountTrx} TRX${r.success ? '' : ' [失败]'}`);
+    console.log('对方      :', r.counterparty);
+    console.log('txID      :', short, r.explorer);
+    if (r.memo) console.log('memo      :', r.memo.length > 80 ? r.memo.slice(0, 80) + '…' : r.memo);
+  }
+}
+
 // run --net nile  （在线模式：build+sign+broadcast+wait 一次完成）
 async function cmdRun(net, a) {
   guardMainnet(net, 'run');
@@ -282,9 +403,11 @@ async function cmdRun(net, a) {
       case 'sign':      await cmdSign(net, args); break;
       case 'broadcast': await cmdBroadcast(net, args); break;
       case 'wait':      await cmdWait(net, args); break;
+      case 'query':
+      case 'find':      await cmdQuery(net, args); break;
       case 'run':       await cmdRun(net, args); break;
       default:
-        console.log('用法: node memo-tx.js <balance|build|sign|broadcast|wait|run> [选项]\n' +
+        console.log('用法: node memo-tx.js <balance|build|sign|broadcast|wait|query|run> [选项]\n' +
                     '默认网络 nile 测试网；主网需 TRON_MAINNET_CONFIRM=YES。详见文件头注释。');
         process.exit(cmd ? 1 : 0);
     }

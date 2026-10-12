@@ -10,6 +10,7 @@
     "sign": "node memo-tx.js sign",
     "broadcast": "node memo-tx.js broadcast --net nile",
     "wait": "node memo-tx.js wait --net nile",
+    "query": "node memo-tx.js query --net nile",
     "run": "node memo-tx.js run --net nile"
   },
   "license": "MIT",
