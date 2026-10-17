@@ -30,6 +30,7 @@
  *   node memo-tx.js query --net nile --address Txxxx --amount 12.34
  *   node memo-tx.js query --address Txxxx --min-trx 1 --max-trx 100 --direction out
  *   node memo-tx.js query --address Txxxx --amount-sun 154 --memo-substr ANCHOR --json
+ *   node memo-tx.js query --address Txxxx --start 2026-10-01 --end 2026-10-17   # 时间窗口(UTC, --end 含当天)
  *
  *   # 一步到位（在线热钱包模式，Nile 测试网）
  *   FROM_PRIVATE_KEY=0xyourkey node memo-tx.js run --net nile
@@ -250,7 +251,17 @@ async function cmdWait(net, a) {
 }
 
 // query --net nile --address Txxx [--amount 12.34 | --amount-sun N | --min-trx/--max-trx]
-//       [--direction in|out|all] [--memo-substr s] [--limit 20] [--max-pages 20] [--json] [--full]
+//       [--direction in|out|all] [--memo-substr s] [--start 2026-10-01 --end 2026-10-17]
+//       [--limit 20] [--max-pages 20] [--json] [--full]
+function parseTimeArg(v, name) {
+  if (v === undefined || v === true || v === null) return null;
+  const s = String(v).trim();
+  // 纯数字按毫秒时间戳；否则按 ISO8601 / YYYY-MM-DD 解析
+  const ms = /^\d+$/.test(s) ? Number(s) : Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T00:00:00Z' : s);
+  if (!Number.isFinite(ms)) throw new Error(`时间参数 --${name} 无法解析: ${s}（示例：2026-10-01 或 2026-10-01T08:30:00Z 或毫秒时间戳）`);
+  return ms;
+}
+
 async function cmdQuery(net, a) {
   if (!a.address) throw new Error('需要 --address Txxxx');
   const base58 = TronWeb.isAddress(a.address)
@@ -277,6 +288,12 @@ async function cmdQuery(net, a) {
   const includeFailed = a['include-failed'] === true || a['include-failed'] === 'true';
   const pageSize = 200;
 
+  // 时间窗口（毫秒，UTC）：同时下推给节点并在本地兜底过滤
+  const startMs = parseTimeArg(a.start, 'start');
+  let endMs = parseTimeArg(a.end, 'end');
+  if (endMs !== null && /^\d{4}-\d{2}-\d{2}$/.test(String(a.end).trim())) endMs += 24 * 3600 * 1000 - 1; // --end 日期含当天
+  if (startMs !== null && endMs !== null && startMs > endMs) throw new Error('时间范围非法：--start 晚于 --end');
+
   const headers = { accept: 'application/json' };
   if (process.env.TRONGRID_API_KEY) headers['TRON-PRO-API-KEY'] = process.env.TRONGRID_API_KEY;
 
@@ -294,6 +311,8 @@ async function cmdQuery(net, a) {
   while (pages < maxPages && rows.length < want) {
     const q = new URLSearchParams({ limit: String(pageSize), only_confirmed: 'true', order_by: 'block_timestamp,desc' });
     if (fingerprint) q.set('fingerprint', fingerprint);
+    if (startMs !== null) q.set('min_timestamp', String(startMs));
+    if (endMs !== null) q.set('max_timestamp', String(endMs));
     const url = `${NETWORKS[net].host}/v1/accounts/${encodeURIComponent(base58)}/transactions?${q}`;
 
     // 公共节点无 API key 时限流(429)/偶发 5xx：指数退避重试
@@ -311,8 +330,13 @@ async function cmdQuery(net, a) {
     pages++;
     if (!data.length) break;
 
+    let reachedStart = false;
     for (const tx of data) {
       scanned++;
+      const ts = Number(tx.block_timestamp) || 0;
+      // 结果按时间倒序：一旦早于窗口起点，后面的都更早，直接终止全部翻页
+      if (startMs !== null && ts && ts < startMs) { reachedStart = true; break; }
+      if (endMs !== null && ts && ts > endMs) continue;
       const contract = (tx.raw_data && tx.raw_data.contract || []).find((c) => c.type === 'TransferContract');
       if (!contract) continue; // 只统计 TRX 原生转账；TRC20(USDT) 走另一个接口
       const v = contract.parameter.value;
@@ -338,6 +362,7 @@ async function cmdQuery(net, a) {
       });
       if (rows.length >= want) break;
     }
+    if (reachedStart) break;
     fingerprint = j.meta && j.meta.fingerprint;
     if (!fingerprint) break;
   }
@@ -352,6 +377,11 @@ async function cmdQuery(net, a) {
   if (minSun !== null || maxSun !== null) cond.push('范围=' + ((minSun ?? 0) / 1e6) + '~' + ((maxSun ?? Infinity) / 1e6) + ' TRX');
   if (direction !== 'all') cond.push('方向=' + direction);
   if (memoSub) cond.push('memo含"' + memoSub + '"');
+  if (startMs !== null || endMs !== null) {
+    cond.push('时间=' +
+      (startMs ? new Date(startMs).toISOString().replace('.000Z', 'Z') : '最早') + ' ~ ' +
+      (endMs ? new Date(endMs).toISOString().replace('.000Z', 'Z') : '最新'));
+  }
   console.log('条件      :', cond.join('，') || '全部 TRX 转账');
   console.log(`扫描 ${scanned} 笔交易 / ${pages} 页，命中 ${rows.length} 笔${rows.length === want ? '（达到 --limit，可继续翻页）' : ''}`);
   if (!rows.length) return;
