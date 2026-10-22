@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.zrhq2013.app-mergeDebugResources-29:/values-pt-rBR/values-pt-rBR.xml",
+            "outputFile": "com.zrhq2013.app-mergeDebugResources-30:/values-pt-rBR/values-pt-rBR.xml",
             "map": [
                 {
                     "source": "/root/.gradle/caches/8.14.6/transforms/bc7f8d430b0c29cf9f6968556d48e0d5/transformed/material-1.11.0/res/values-pt-rBR/values-pt-rBR.xml",

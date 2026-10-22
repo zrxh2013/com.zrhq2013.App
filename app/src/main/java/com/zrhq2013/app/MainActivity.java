@@ -1,235 +1,156 @@
 package com.zrhq2013.app;
 
-import android.Manifest;
-import android.annotation.SuppressLint;
-import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.text.TextUtils;
-import android.webkit.CookieManager;
-import android.webkit.URLUtil;
-import android.webkit.ValueCallback;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.ProgressBar;
-import android.widget.Toast;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String APP_URL = "https://etax.chinatax.gov.cn/webstatic/download-service/100009?dmnHafHu=0RHyUWqlqWxCqOPJjoV_L5r_lIULVak3tItx_BUSa8ig1_XPkswA9EMCLFArKQr6RnEr2GuUm3nqJfL_lDaRGqmrrY_LNdCbp0b_fjqawNpv0uEZUPIyvda";
-    private static final int FILE_CHOOSER_RESULT_CODE = 1;
-    private static final int STORAGE_PERMISSION_REQUEST_CODE = 2;
+    public static final String OFFICIAL_URL =
+            "https://etax.chinatax.gov.cn/webstatic/download-service/100009?dmnHafHu=0RHyUWqlqWxCqOPJjoV_L5r_lIULVak3tItx_BUSa8ig1_XPkswA9EMCLFArKQr6RnEr2GuUm3nqJfL_lDaRGqmrrY_LNdCbp0b_fjqawNpv0uEZUPIyvda";
 
-    private WebView webView;
-    private ProgressBar progressBar;
-    private ValueCallback<Uri[]> filePathCallback;
-    private PendingDownload pendingDownload;
+    private static final int TAB_FORMS = 0;
+    private static final int TAB_TOOLS = 1;
 
-    private static class PendingDownload {
-        final String url;
-        final String userAgent;
-        final String contentDisposition;
-        final String mimeType;
+    private final List<TaxForm> allForms = new ArrayList<>();
+    private final List<TaxForm> shownForms = new ArrayList<>();
 
-        PendingDownload(String url, String userAgent, String contentDisposition, String mimeType) {
-            this.url = url;
-            this.userAgent = userAgent;
-            this.contentDisposition = contentDisposition;
-            this.mimeType = mimeType;
-        }
-    }
+    private FormAdapter adapter;
+    private EditText searchInput;
+    private TextView chipForms;
+    private TextView chipTools;
+    private TextView sectionTitle;
+    private LinearLayout emptyView;
+    private TextView emptyText;
+    private int currentTab = TAB_FORMS;
+    private BroadcastReceiver downloadReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        webView = findViewById(R.id.webview);
-        progressBar = findViewById(R.id.progress_bar);
-
-        setupWebView();
-        webView.loadUrl(APP_URL);
+        initData();
+        initViews();
+        applyTab(TAB_FORMS);
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private void setupWebView() {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setJavaScriptCanOpenWindowsAutomatically(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setLoadWithOverviewMode(true);
-        settings.setUseWideViewPort(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
-        settings.setSupportZoom(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setSupportMultipleWindows(false);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        }
-
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            WebView.setWebContentsDebuggingEnabled(false);
-        }
-
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("http://") || url.startsWith("https://")) {
-                    return false;
-                }
-
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                    startActivity(intent);
-                    return true;
-                } catch (Exception e) {
-                    return false;
-                }
-            }
-        });
-
-        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
-            PendingDownload download = new PendingDownload(url, userAgent, contentDisposition, mimeType);
-            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
-                    && ContextCompat.checkSelfPermission(MainActivity.this,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                pendingDownload = download;
-                ActivityCompat.requestPermissions(MainActivity.this,
-                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                        STORAGE_PERMISSION_REQUEST_CODE);
-            } else {
-                enqueueDownload(download);
-            }
-        });
-
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                super.onProgressChanged(view, newProgress);
-                progressBar.setProgress(newProgress);
-                progressBar.setVisibility(newProgress == 100 ? ProgressBar.GONE : ProgressBar.VISIBLE);
-            }
-
-            @Override
-            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback,
-                                             FileChooserParams fileChooserParams) {
-                filePathCallback = callback;
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("*/*");
-                startActivityForResult(intent, FILE_CHOOSER_RESULT_CODE);
-                return true;
-            }
-        });
+    private void initData() {
+        allForms.addAll(Arrays.asList(
+                new TaxForm(
+                        "个人所得税基础信息表（A表）",
+                        "2020-07-28",
+                        "24 KB",
+                        "https://wcdn.etax.chinatax.gov.cn/bbxzdownload/collection/xxcjgl/grsdsjcxxa.zip",
+                        "grsdsjcxxa.zip"),
+                new TaxForm(
+                        "个人所得税基础信息表（B表）",
+                        "2020-07-28",
+                        "25 KB",
+                        "https://wcdn.etax.chinatax.gov.cn/bbxzdownload/collection/xxcjgl/grsdsjcxxb.zip",
+                        "grsdsjcxxb.zip")
+        ));
     }
 
-    private void enqueueDownload(PendingDownload download) {
-        try {
-            String fileName = URLUtil.guessFileName(download.url, download.contentDisposition,
-                    download.mimeType);
-            if (TextUtils.isEmpty(fileName)) {
-                fileName = "tax-form-" + System.currentTimeMillis() + ".zip";
-            }
-            if (!fileName.contains(".")) {
-                fileName += ".zip";
+    private void initViews() {
+        chipForms = findViewById(R.id.chip_forms);
+        chipTools = findViewById(R.id.chip_tools);
+        sectionTitle = findViewById(R.id.tv_section_title);
+        emptyView = findViewById(R.id.empty_view);
+        emptyText = findViewById(R.id.tv_empty);
+        searchInput = findViewById(R.id.et_search);
+
+        RecyclerView recyclerView = findViewById(R.id.rv_forms);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.setHasFixedSize(false);
+        adapter = new FormAdapter(form ->
+                DownloadCenter.download(MainActivity.this, form.url, form.fileName));
+        recyclerView.setAdapter(adapter);
+
+        chipForms.setOnClickListener(v -> applyTab(TAB_FORMS));
+        chipTools.setOnClickListener(v -> applyTab(TAB_TOOLS));
+
+        findViewById(R.id.btn_official).setOnClickListener(v ->
+                WebViewActivity.start(MainActivity.this, OFFICIAL_URL));
+
+        searchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
             }
 
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(download.url));
-            request.setTitle(fileName);
-            request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI
-                    | DownloadManager.Request.NETWORK_MOBILE);
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
-            request.allowScanningByMediaScanner();
-
-            if (!TextUtils.isEmpty(download.userAgent)) {
-                request.addRequestHeader("User-Agent", download.userAgent);
-            }
-            String cookie = CookieManager.getInstance().getCookie(download.url);
-            if (!TextUtils.isEmpty(cookie)) {
-                request.addRequestHeader("Cookie", cookie);
-            }
-            if (!TextUtils.isEmpty(download.mimeType)) {
-                request.setMimeType(download.mimeType);
-            } else {
-                request.setMimeType("application/zip");
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterForms(s.toString());
             }
 
-            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            if (manager == null) {
-                Toast.makeText(this, R.string.download_unavailable, Toast.LENGTH_SHORT).show();
-                return;
+            @Override
+            public void afterTextChanged(Editable s) {
             }
+        });
 
-            manager.enqueue(request);
-            Toast.makeText(this, getString(R.string.download_started, fileName), Toast.LENGTH_LONG).show();
-        } catch (Exception e) {
-            Toast.makeText(this, R.string.download_failed, Toast.LENGTH_SHORT).show();
+        downloadReceiver = DownloadCenter.registerCompleteReceiver(this);
+    }
+
+    private void applyTab(int tab) {
+        currentTab = tab;
+        chipForms.setSelected(tab == TAB_FORMS);
+        chipTools.setSelected(tab == TAB_TOOLS);
+
+        if (tab == TAB_FORMS) {
+            sectionTitle.setText(R.string.section_title);
+            searchInput.setEnabled(true);
+            filterForms(searchInput.getText().toString());
+        } else {
+            sectionTitle.setText(R.string.tab_tools);
+            searchInput.setEnabled(false);
+            shownForms.clear();
+            adapter.submit(shownForms);
+            emptyText.setText(R.string.empty_tools);
+            emptyView.setVisibility(View.VISIBLE);
         }
+    }
+
+    private void filterForms(String keyword) {
+        if (currentTab != TAB_FORMS) {
+            return;
+        }
+        shownForms.clear();
+        String key = keyword == null ? "" : keyword.trim();
+        for (TaxForm form : allForms) {
+            if (key.isEmpty() || form.title.contains(key)) {
+                shownForms.add(form);
+            }
+        }
+        adapter.submit(shownForms);
+        emptyText.setText(R.string.empty_forms);
+        emptyView.setVisibility(shownForms.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode != STORAGE_PERMISSION_REQUEST_CODE) {
-            return;
-        }
-
-        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED
-                && pendingDownload != null) {
-            enqueueDownload(pendingDownload);
-        } else {
-            Toast.makeText(this, R.string.storage_permission_denied, Toast.LENGTH_SHORT).show();
-        }
-        pendingDownload = null;
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == FILE_CHOOSER_RESULT_CODE && filePathCallback != null) {
-            Uri[] result = null;
-            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
-                result = new Uri[]{data.getData()};
-            }
-            filePathCallback.onReceiveValue(result);
-            filePathCallback = null;
-        }
+        DownloadCenter.onRequestPermissionsResult(this, requestCode, grantResults);
     }
 
     @Override
     protected void onDestroy() {
-        if (webView != null) {
-            webView.destroy();
-        }
+        DownloadCenter.unregisterCompleteReceiver(this, downloadReceiver);
         super.onDestroy();
     }
 }

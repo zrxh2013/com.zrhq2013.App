@@ -5,4 +5,15 @@
     <color name="colorAccent">#E6A23C</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
+
+    <color name="page_bg">#F4F6FA</color>
+    <color name="header_start">#0B63B8</color>
+    <color name="header_end">#003E7E</color>
+    <color name="text_primary">#1F2733</color>
+    <color name="text_secondary">#7A8699</color>
+    <color name="divider">#E7EBF2</color>
+    <color name="chip_text_dark">#24445F</color>
+    <color name="icon_circle_bg">#E8F2FC</color>
+    <color name="zip_tag_bg">#FFF4E0</color>
+    <color name="zip_tag_text">#B07013</color>
 </resources>

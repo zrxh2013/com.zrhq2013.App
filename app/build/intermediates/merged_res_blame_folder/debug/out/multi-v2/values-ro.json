@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.zrhq2013.app-mergeDebugResources-29:/values-ro/values-ro.xml",
+            "outputFile": "com.zrhq2013.app-mergeDebugResources-30:/values-ro/values-ro.xml",
             "map": [
                 {
                     "source": "/root/.gradle/caches/8.14.6/transforms/13a07d5206342a26806d4cc4a6b72e46/transformed/appcompat-1.6.1/res/values-ro/values-ro.xml",
