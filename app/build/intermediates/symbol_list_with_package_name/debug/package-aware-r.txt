@@ -3315,6 +3315,7 @@ id header_title
 id hideable
 id home
 id homeAsUp
+id home_url_bar
 id honorRequest
 id horizontal_only
 id icon
@@ -3586,6 +3587,7 @@ id tv_form_meta
 id tv_form_name
 id tv_home_subtitle
 id tv_home_title
+id tv_home_url
 id tv_section_title
 id tv_url_bar
 id tv_zip_tag

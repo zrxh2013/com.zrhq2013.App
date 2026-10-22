@@ -15,10 +15,43 @@
         android:paddingEnd="20dp"
         android:paddingBottom="22dp">
 
+        <!-- 网址栏（固定主域名） -->
+        <LinearLayout
+            android:id="@+id/home_url_bar"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:layout_alignParentTop="true"
+            android:background="@drawable/bg_url_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp">
+
+            <ImageView
+                android:layout_width="13dp"
+                android:layout_height="13dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_lock" />
+
+            <TextView
+                android:id="@+id/tv_home_url"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="https://etax.chinatax.gov.cn"
+                android:textColor="#EAF3FF"
+                android:textSize="12sp" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/tv_home_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_below="@id/home_url_bar"
+            android:layout_marginTop="16dp"
             android:text="@string/home_title"
             android:textColor="@color/white"
             android:textSize="23sp"
