@@ -40,6 +40,10 @@
         "source": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-main-34:/mipmap-xxxhdpi/ic_launcher.png"
     },
     {
+        "merged": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-merged_res-32:/color_bg_chip_text.xml.flat",
+        "source": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-main-34:/color/bg_chip_text.xml"
+    },
+    {
         "merged": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-merged_res-32:/drawable_ic_download.xml.flat",
         "source": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-main-34:/drawable/ic_download.xml"
     },
@@ -76,6 +80,10 @@
         "source": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-main-34:/layout/activity_main.xml"
     },
     {
+        "merged": "com.zrhq2013.app-merged_res-32:/drawable_bg_url_bar.xml.flat",
+        "source": "com.zrhq2013.app-main-34:/drawable/bg_url_bar.xml"
+    },
+    {
         "merged": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-merged_res-32:/drawable_bg_official_button.xml.flat",
         "source": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-main-34:/drawable/bg_official_button.xml"
     },
@@ -92,8 +100,12 @@
         "source": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-main-34:/drawable/ic_back.xml"
     },
     {
-        "merged": "com.zrhq2013.app-merged_res-32:/color_bg_chip_text.xml.flat",
-        "source": "com.zrhq2013.app-main-34:/color/bg_chip_text.xml"
+        "merged": "com.zrhq2013.app-merged_res-32:/layout_activity_web.xml.flat",
+        "source": "com.zrhq2013.app-main-34:/layout/activity_web.xml"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-32:/drawable_ic_lock.xml.flat",
+        "source": "com.zrhq2013.app-main-34:/drawable/ic_lock.xml"
     },
     {
         "merged": "/root/.gradle/daemon/8.14.6/com.zrhq2013.app-merged_res-32:/drawable_ic_external.xml.flat",

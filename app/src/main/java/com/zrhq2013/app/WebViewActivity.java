@@ -16,6 +16,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -25,9 +26,11 @@ public class WebViewActivity extends AppCompatActivity {
     private static final String EXTRA_URL = "extra_url";
     private static final int FILE_CHOOSER_RESULT_CODE = 1;
 
+    private static final String DEFAULT_DOMAIN = "https://etax.chinatax.gov.cn";
+
     private WebView webView;
     private ProgressBar progressBar;
-    private TextView titleView;
+    private TextView urlBar;
     private ValueCallback<Uri[]> filePathCallback;
     private BroadcastReceiver downloadReceiver;
 
@@ -44,7 +47,8 @@ public class WebViewActivity extends AppCompatActivity {
 
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progress_bar);
-        titleView = findViewById(R.id.tv_web_title);
+        urlBar = findViewById(R.id.tv_url_bar);
+        urlBar.setText(DEFAULT_DOMAIN);
 
         findViewById(R.id.btn_back).setOnClickListener(v -> handleBack());
 
@@ -87,6 +91,22 @@ public class WebViewActivity extends AppCompatActivity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                if (!TextUtils.isEmpty(url)) {
+                    urlBar.setText(url);
+                }
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (!TextUtils.isEmpty(url)) {
+                    urlBar.setText(url);
+                }
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     return false;
@@ -112,14 +132,6 @@ public class WebViewActivity extends AppCompatActivity {
                 super.onProgressChanged(view, newProgress);
                 progressBar.setProgress(newProgress);
                 progressBar.setVisibility(newProgress == 100 ? ProgressBar.GONE : ProgressBar.VISIBLE);
-            }
-
-            @Override
-            public void onReceivedTitle(WebView view, String title) {
-                super.onReceivedTitle(view, title);
-                if (title != null && !title.isEmpty()) {
-                    titleView.setText(title);
-                }
             }
 
             @Override
