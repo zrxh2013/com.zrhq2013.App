@@ -270,13 +270,6 @@
   function showScreen(name) {
     document.getElementById('screen-home').style.display = name === 'home' ? 'flex' : 'none';
     document.getElementById('screen-web').style.display = name === 'web' ? 'flex' : 'none';
-    if (name === 'web') {
-      const u = document.getElementById('web-url');
-      u.textContent = 'https://etax.chinatax.gov.cn';
-      setTimeout(() => {
-        u.textContent = 'https://etax.chinatax.gov.cn/webstatic/download-service/100009';
-      }, 700);
-    }
   }
   document.querySelector('.btn-official').addEventListener('click', () => showScreen('web'));
 </script>
