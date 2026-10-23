@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人所得税基础信息表（A表）· 演示样例</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"SimSun","Songti SC",serif; background:#8a94a3; padding:24px 12px; color:#1a1a1a; }
+  .page {
+    max-width:820px; margin:0 auto; background:#fff; padding:30px 50px 26px;
+    box-shadow:0 4px 30px rgba(0,0,0,.25); position:relative;
+  }
+  .demo-stamp {
+    position:absolute; top:3px; right:24px; border:2px solid #c0392b; color:#c0392b;
+    font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px;
+    transform:rotate(-7deg); letter-spacing:1.5px; font-family:"Microsoft YaHei",sans-serif;
+  }
+  h1 { text-align:center; font-size:23px; letter-spacing:3px; margin-bottom:4px; }
+  .sub { text-align:center; font-size:13.5px; color:#333; margin-bottom:4px; }
+  .meta-line { display:flex; justify-content:space-between; font-size:12px; margin:6px 2px 6px; }
+  .payer { font-size:13.5px; margin:3px 2px 8px; line-height:1.75; }
+  table { width:100%; border-collapse:collapse; margin-bottom:10px; }
+  th, td { border:1px solid #333; padding:4px 8px; font-size:12.5px; vertical-align:middle; }
+  thead th { background:#f0f4f9; font-weight:700; text-align:center; font-size:12.5px; line-height:1.5; }
+  .idx { text-align:center; width:38px; color:#555; }
+  .lab { background:#f7f9fc; width:170px; color:#222; }
+  .val { }
+  .group-head td { background:#eaf1fa; font-weight:700; font-size:13px; }
+  .decl {
+    border:1px solid #333; padding:9px 13px; font-size:12.5px; line-height:2; margin-bottom:10px;
+  }
+  .sign-row { display:flex; justify-content:space-between; margin-top:6px; font-size:12.5px; }
+  .review { width:100%; border-collapse:collapse; margin-bottom:10px; }
+  .review .lab { width:110px; }
+  .ok-badge { color:#1A9E5B; font-weight:700; }
+  .footline {
+    text-align:center; font-size:13px; letter-spacing:6px; margin-top:4px; font-weight:700;
+  }
+  .note {
+    font-size:10px; color:#777; border-top:1px dashed #bbb; margin-top:7px; padding-top:6px; line-height:1.5;
+    font-family:"Microsoft YaHei",sans-serif;
+  }
+  .bar { max-width:820px; margin:14px auto 0; text-align:center; font-family:"Microsoft YaHei",sans-serif; }
+  .bar button {
+    background:#005BAC; color:#fff; border:none; border-radius:20px; padding:10px 26px;
+    font-size:14px; cursor:pointer; margin:0 6px;
+  }
+  .bar span { color:#e8edf4; font-size:12px; }
+  @media print {
+    body { background:#fff; padding:0; }
+    .page { box-shadow:none; max-width:none; padding:14px 26px 10px; }
+    .demo-stamp { top:2px; }
+    .bar { display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="demo-stamp">演示样例 · 非正式税务文书</div>
+
+  <h1>个人所得税基础信息表（A表）</h1>
+  <div class="sub">（适用于扣缴义务人填报）</div>
+
+  <div class="meta-line">
+    <span>表单编号：F202610238555</span>
+    <span>单据编号：R202610233613</span>
+  </div>
+
+  <div class="payer">
+    扣缴义务人名称：<b>杭州云栖科技有限公司</b><br>
+    扣缴义务人纳税人识别号（统一社会信用代码）：<b>91330106MA27XXXX1A</b>　　联系电话：0571-88886666
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="2" style="width:38px">序号</th>
+        <th colspan="6">纳税人基本信息（带*必填）</th>
+      </tr>
+      <tr><th style="width:130px">纳税人识别号</th><th>*纳税人姓名</th><th>*身份证件类型</th><th>*身份证件号码</th><th>*出生日期</th><th>*国籍/地区</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="idx">1</td>
+        <td>330106199003151234</td><td>张伟</td><td>居民身份证</td>
+        <td>330106199003151234</td><td>1990-03-15</td><td>中国</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table>
+    <tbody>
+      <tr class="group-head"><td colspan="4">任职受雇从业信息</td></tr>
+      <tr><td class="lab">类型</td><td>雇员</td><td class="lab">职务</td><td>软件工程师</td></tr>
+      <tr><td class="lab">学历</td><td>大学本科</td><td class="lab">任职受雇从业日期</td><td>2020-07-01</td></tr>
+      <tr><td class="lab">离职日期</td><td>—（在职）</td><td class="lab">手机号码</td><td>13800138000</td></tr>
+
+      <tr class="group-head"><td colspan="4">联系方式</td></tr>
+      <tr><td class="lab">户籍所在地</td><td colspan="3">浙江省杭州市西湖区文三路100号</td></tr>
+      <tr><td class="lab">经常居住地</td><td colspan="3">浙江省杭州市西湖区文三路100号</td></tr>
+      <tr><td class="lab">联系地址</td><td colspan="3">浙江省杭州市西湖区文三路100号</td></tr>
+      <tr><td class="lab">电子邮箱</td><td colspan="3">zhangwei.demo@example.com</td></tr>
+
+      <tr class="group-head"><td colspan="4">银行账户</td></tr>
+      <tr><td class="lab">开户银行</td><td>中国工商银行杭州西湖支行</td><td class="lab">银行账号</td><td>6222021234567890000</td></tr>
+
+      <tr class="group-head"><td colspan="4">投资信息</td></tr>
+      <tr><td class="lab">投资额（元）</td><td>0.00</td><td class="lab">投资比例</td><td>无</td></tr>
+
+      <tr class="group-head"><td colspan="4">其他信息</td></tr>
+      <tr><td class="lab">是否残疾/孤老/烈属</td><td>否</td><td class="lab">残疾/烈属证号</td><td>无</td></tr>
+
+      <tr class="group-head"><td colspan="4">华侨、港澳台、外籍个人信息（中国公民不填）</td></tr>
+      <tr><td class="lab">出生地</td><td>浙江杭州</td><td class="lab">性别</td><td>男</td></tr>
+      <tr><td class="lab">首次入境时间</td><td colspan="3">不适用</td></tr>
+    </tbody>
+  </table>
+
+  <div class="decl">
+    谨声明：本表是根据国家税收法律法规及相关规定填报的，是真实的、可靠的、完整的。
+    <div class="sign-row">
+      <span>扣缴义务人（签章）：杭州云栖科技有限公司</span>
+      <span>2026 年 10 月 23 日</span>
+    </div>
+  </div>
+
+  <table class="review">
+    <tbody>
+      <tr><td class="lab">审核结果</td><td class="ok-badge">✔ 审核通过（已采集归档）</td></tr>
+      <tr><td class="lab">审核人</td><td>管理员（admin）　审核时间：2026-10-23 03:23</td></tr>
+      <tr><td class="lab">审核意见</td><td>员工身份信息、任职受雇信息与扣缴申报资料核对一致，同意采集归档。</td></tr>
+      <tr><td class="lab">流转记录</td><td>2026-10-23 03:22 提交申报 → 03:23 审核通过</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footline">国家税务总局监制（版式参照 · 演示件）</div>
+
+  <div class="note">
+    1. 本件由「税务人工管理中心」演示系统生成，版式参照国家税务总局公开发布的《个人所得税基础信息表（A表）》（etax.chinatax.gov.cn 下载件 grsdsjcxxa）。<br>
+    2. 文中数据均为<b>虚构演示</b>，非正式申报或办税凭证，不具法律效力；正式办税请登录自然人电子税务局或前往主管税务机关办理。
+  </div>
+</div>
+
+<div class="bar">
+  <button onclick="window.print()">打印 / 另存为 PDF</button>
+  <span>浏览器打印中选择“另存为 PDF”即可导出</span>
+</div>
+</body>
+</html>
