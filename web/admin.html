@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#003E7E">
+<title>税务人工管理中心</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; }
+  body {
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#dfe6f0; display:flex; justify-content:center; color:#1F2733;
+  }
+  .app {
+    width:100%; max-width:480px; min-height:100vh; background:#F4F6FA;
+    display:flex; flex-direction:column; position:relative;
+    box-shadow:0 0 40px rgba(0,40,90,.12);
+  }
+  @media (min-width:520px){ body{padding:24px 0;} .app{min-height:calc(100vh - 48px); border-radius:24px; overflow:hidden;} }
+  .view { display:none; flex-direction:column; flex:1; }
+  .view.on { display:flex; }
+
+  /* ===== 通用头部 ===== */
+  .header {
+    background:linear-gradient(135deg,#0B63B8,#003E7E);
+    border-bottom-left-radius:20px; border-bottom-right-radius:20px;
+    padding:calc(14px + env(safe-area-inset-top)) 20px 20px; flex-shrink:0;
+  }
+  .url-bar {
+    height:32px; background:#0F4F96; border-radius:16px;
+    display:flex; align-items:center; gap:6px; padding:0 12px; margin-bottom:14px;
+  }
+  .url-bar .lock { width:13px; height:13px; fill:#8FE3B0; flex-shrink:0; }
+  .url-bar .url { color:#EAF3FF; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .htop { display:flex; align-items:center; }
+  .htop .back { width:30px; height:30px; margin-left:-6px; display:flex; align-items:center; cursor:pointer; }
+  .htop .back svg { width:22px; height:22px; fill:#fff; }
+  .htop h1 { color:#fff; font-size:19px; font-weight:700; flex:1; }
+  .logout { font-size:12px; color:#CFE3F7; border:1px solid rgba(255,255,255,.4); border-radius:14px; padding:5px 12px; cursor:pointer; background:transparent; }
+
+  /* ===== 登录 ===== */
+  #view-login { background:linear-gradient(160deg,#0B63B8,#003E7E); }
+  .login-wrap { flex:1; display:flex; flex-direction:column; justify-content:center; padding:0 34px; }
+  .login-badge {
+    width:64px; height:64px; border-radius:18px; background:rgba(255,255,255,.14);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 16px;
+  }
+  .login-badge svg { width:34px; height:34px; fill:#fff; }
+  .login-wrap h2 { color:#fff; text-align:center; font-size:21px; }
+  .login-wrap .tip { color:#BFD9F2; text-align:center; font-size:12px; margin-top:8px; margin-bottom:30px; }
+  .login-card { background:#fff; border-radius:18px; padding:22px 20px; }
+  .field { margin-bottom:16px; }
+  .field label { display:block; font-size:12px; color:#6B7888; margin-bottom:7px; }
+  .field input {
+    width:100%; height:44px; border:1px solid #DDE4EE; border-radius:12px;
+    padding:0 14px; font-size:14px; outline:none; background:#F8FAFD;
+  }
+  .field input:focus { border-color:#005BAC; background:#fff; }
+  .btn-primary {
+    width:100%; height:46px; border:none; border-radius:23px; cursor:pointer;
+    background:linear-gradient(135deg,#0B63B8,#005BAC); color:#fff; font-size:15px; font-weight:600;
+  }
+  .btn-primary:active { opacity:.88; }
+  .login-err { color:#E5484D; font-size:12px; text-align:center; min-height:18px; margin-bottom:6px; }
+  .demo-note { text-align:center; color:rgba(255,255,255,.75); font-size:11px; margin-top:22px; line-height:1.7; }
+
+  /* ===== 工作台 ===== */
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px 16px 4px; }
+  .stat {
+    background:#fff; border-radius:14px; padding:14px 16px;
+    box-shadow:0 2px 8px rgba(15,60,110,.06);
+  }
+  .stat .num { font-size:22px; font-weight:700; color:#005BAC; }
+  .stat .lbl { font-size:12px; color:#7A8699; margin-top:4px; }
+  .stat.warn .num { color:#D9830B; }
+  .stat.ok .num { color:#1A9E5B; }
+  .stat.no .num { color:#B0464B; }
+
+  .tabs { display:flex; gap:8px; padding:14px 16px 6px; flex-shrink:0; }
+  .tab {
+    flex:1; text-align:center; height:38px; line-height:38px; font-size:13px;
+    border-radius:19px; background:#fff; color:#4A5568; border:1px solid #E2E8F0; cursor:pointer;
+  }
+  .tab.on { background:#005BAC; color:#fff; border-color:#005BAC; font-weight:600; }
+  .tab .badge {
+    display:inline-block; min-width:17px; height:17px; line-height:17px; border-radius:9px;
+    background:#E5484D; color:#fff; font-size:10px; margin-left:4px; padding:0 4px;
+  }
+  .tab.on .badge { background:#fff; color:#E5484D; }
+
+  .pane { display:none; flex:1; padding:6px 16px 20px; }
+  .pane.on { display:block; }
+
+  .pane-head { display:flex; align-items:center; justify-content:space-between; padding:8px 4px 10px; }
+  .pane-head .t { font-size:13px; font-weight:600; }
+  .btn-add {
+    border:none; background:#005BAC; color:#fff; font-size:12px; border-radius:16px;
+    padding:8px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;
+  }
+  .btn-add svg { width:13px; height:13px; fill:#fff; }
+
+  /* 列表卡片 */
+  .item {
+    background:#fff; border-radius:14px; padding:14px; margin-bottom:10px;
+    box-shadow:0 2px 8px rgba(15,60,110,.06);
+  }
+  .item .row1 { display:flex; align-items:center; gap:8px; }
+  .item .name { font-size:14px; font-weight:600; flex:1; line-height:1.4; }
+  .tag { font-size:10px; border-radius:4px; padding:2px 7px; flex-shrink:0; }
+  .tag.pub { background:#E4F6EC; color:#1A9E5B; }
+  .tag.draft { background:#EEF1F6; color:#7A8699; }
+  .tag.pending { background:#FFF4E0; color:#C77B16; }
+  .tag.approved { background:#E4F6EC; color:#1A9E5B; }
+  .tag.rejected { background:#FBE9EA; color:#B0464B; }
+  .tag.tax { background:#E8F1FB; color:#005BAC; }
+  .item .row2 { font-size:12px; color:#7A8699; margin-top:8px; line-height:1.6; }
+  .item .ops { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .op {
+    font-size:12px; border-radius:14px; padding:7px 13px; cursor:pointer;
+    border:1px solid #D5E2F1; background:#fff; color:#005BAC;
+  }
+  .op.solid { background:#005BAC; color:#fff; border-color:#005BAC; }
+  .op.danger { color:#B0464B; border-color:#EBC8CA; }
+  .op.gray { color:#6B7888; border-color:#DDE4EE; }
+  .amount { font-weight:700; color:#005BAC; }
+
+  .empty-box { text-align:center; color:#9AA6B5; font-size:13px; padding:60px 0; }
+
+  /* ===== 弹窗 / 全屏表单页 ===== */
+  .sheet-mask {
+    display:none; position:absolute; inset:0; background:rgba(15,30,50,.45);
+    z-index:30; align-items:flex-end;
+  }
+  .sheet-mask.on { display:flex; }
+  .sheet {
+    background:#fff; width:100%; max-height:88%; border-radius:20px 20px 0 0;
+    display:flex; flex-direction:column; animation:up .2s ease;
+  }
+  @keyframes up { from{transform:translateY(100%);} to{transform:translateY(0);} }
+  .sheet-head {
+    display:flex; align-items:center; padding:16px 18px 10px; border-bottom:1px solid #EEF1F6;
+  }
+  .sheet-head .t { font-size:15px; font-weight:700; flex:1; }
+  .sheet-head .x { width:28px; height:28px; cursor:pointer; text-align:center; line-height:28px; color:#7A8699; font-size:18px; }
+  .sheet-body { padding:16px 18px calc(20px + env(safe-area-inset-bottom)); overflow-y:auto; }
+  .sheet-foot { display:flex; gap:10px; margin-top:6px; }
+  .sheet-foot .btn-primary { flex:1; }
+  .btn-line {
+    flex:1; height:46px; border-radius:23px; border:1px solid #D5E2F1;
+    background:#fff; color:#005BAC; font-size:15px; cursor:pointer;
+  }
+
+  .field-row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .field-row input[type=text] {
+    flex:1; height:40px; border:1px solid #DDE4EE; border-radius:10px; padding:0 12px;
+    font-size:13px; outline:none; background:#F8FAFD;
+  }
+  .field-row select {
+    width:96px; height:40px; border:1px solid #DDE4EE; border-radius:10px; font-size:12px;
+    padding:0 6px; background:#F8FAFD;
+  }
+  .field-row .del {
+    width:34px; height:34px; flex-shrink:0; border:none; background:#FBE9EA; color:#B0464B;
+    border-radius:9px; font-size:16px; cursor:pointer;
+  }
+  .btn-addline {
+    width:100%; height:40px; border:1px dashed #9CC4EC; border-radius:10px; background:#F6FAFF;
+    color:#005BAC; font-size:13px; cursor:pointer; margin-top:2px;
+  }
+  textarea {
+    width:100%; border:1px solid #DDE4EE; border-radius:10px; padding:10px 12px; font-size:13px;
+    outline:none; resize:vertical; min-height:64px; background:#F8FAFD; font-family:inherit;
+  }
+  select.full { width:100%; height:44px; border:1px solid #DDE4EE; border-radius:12px; padding:0 12px; font-size:14px; background:#F8FAFD; }
+
+  /* 填报生成页 / 详情页 */
+  #view-fill, #view-detail { background:#F4F6FA; }
+  .fill-body { padding:14px 16px 24px; }
+  .sec-title { font-size:13px; font-weight:700; margin:6px 2px 10px; display:flex; align-items:center; gap:6px; }
+  .sec-title::before { content:''; width:3px; height:13px; background:#005BAC; border-radius:2px; }
+  .card-box { background:#fff; border-radius:14px; padding:4px 14px; margin-bottom:14px; box-shadow:0 2px 8px rgba(15,60,110,.06); }
+  .card-box .field { margin:12px 0; }
+  .card-box .field label { margin-bottom:6px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 12px; }
+
+  .kv { display:flex; font-size:13px; padding:10px 0; border-bottom:1px dashed #EEF1F6; }
+  .kv:last-child { border-bottom:none; }
+  .kv .k { width:96px; color:#7A8699; flex-shrink:0; }
+  .kv .v { flex:1; text-align:right; word-break:break-all; }
+  .kv.total { border-top:1px solid #DDE4EE; border-bottom:none; margin-top:4px; padding-top:14px; }
+  .kv.total .k, .kv.total .v { font-weight:700; color:#1F2733; }
+  .kv.total .v { color:#005BAC; font-size:16px; }
+
+  .timeline { margin:4px 0 0; }
+  .tl-item { display:flex; gap:10px; padding-bottom:16px; position:relative; }
+  .tl-item::before { content:''; position:absolute; left:5px; top:16px; bottom:0; width:1.5px; background:#DDE4EE; }
+  .tl-item:last-child::before { display:none; }
+  .tl-dot { width:11px; height:11px; border-radius:50%; background:#C6D0DD; margin-top:3px; flex-shrink:0; z-index:1; }
+  .tl-item.cur .tl-dot { background:#005BAC; box-shadow:0 0 0 4px #DCEBFB; }
+  .tl-item.ok .tl-dot { background:#1A9E5B; }
+  .tl-item.no .tl-dot { background:#B0464B; }
+  .tl-text { font-size:13px; }
+  .tl-text small { display:block; color:#9AA6B5; font-size:11px; margin-top:3px; }
+
+  .review-opinion { width:100%; min-height:74px; margin-top:10px; }
+  .detail-foot {
+    display:flex; gap:10px; padding:12px 16px calc(16px + env(safe-area-inset-bottom));
+    background:#fff; border-top:1px solid #EEF1F6; flex-shrink:0;
+  }
+  .btn-reject {
+    flex:1; height:46px; border-radius:23px; border:1px solid #EBC8CA; background:#fff;
+    color:#B0464B; font-size:15px; cursor:pointer;
+  }
+  .btn-approve {
+    flex:1; height:46px; border:none; border-radius:23px; cursor:pointer;
+    background:#1A9E5B; color:#fff; font-size:15px; font-weight:600;
+  }
+  .btn-approve:disabled, .btn-reject:disabled { opacity:.45; }
+
+  .toast {
+    position:absolute; left:50%; top:45%; transform:translate(-50%,-50%);
+    background:rgba(20,30,45,.88); color:#fff; font-size:13px; border-radius:10px;
+    padding:12px 20px; z-index:60; display:none; max-width:80%; text-align:center;
+  }
+  .toast.on { display:block; }
+
+  /* ===== 打印单据 ===== */
+  #print-area { display:none; }
+  @media print {
+    body { background:#fff; display:block; }
+    .app { display:none !important; }
+    #print-area { display:block !important; width:100%; max-width:none; box-shadow:none; }
+    .doc { padding:0; }
+  }
+  .doc { padding:28px 24px; color:#1a1a1a; font-size:13px; line-height:1.9; background:#fff; }
+  .doc .doc-title { text-align:center; font-size:19px; font-weight:700; letter-spacing:2px; margin-bottom:4px; }
+  .doc .doc-sub { text-align:center; font-size:11px; color:#666; margin-bottom:16px; }
+  .doc .doc-no { text-align:right; font-size:11px; color:#444; margin-bottom:10px; }
+  .doc table { width:100%; border-collapse:collapse; margin-bottom:14px; }
+  .doc td, .doc th { border:1px solid #333; padding:7px 9px; font-size:12px; vertical-align:top; }
+  .doc th { background:#f0f4f9; font-weight:600; text-align:center; }
+  .doc .lab { background:#f7f9fc; width:110px; color:#333; }
+  .doc .right { text-align:right; }
+  .doc .center { text-align:center; }
+  .doc .sign { margin-top:26px; display:flex; justify-content:space-between; font-size:12px; }
+  .doc .watermark { color:#B0464B; border:1px solid #B0464B; display:inline-block; padding:1px 8px; border-radius:4px; font-size:10px; margin-right:8px; }
+  .doc .doc-note { font-size:10px; color:#888; margin-top:10px; border-top:1px dashed #bbb; padding-top:8px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ 登录视图 ============ -->
+  <section class="view on" id="view-login">
+    <div class="login-wrap">
+      <div class="login-badge">
+        <svg viewBox="0 0 24 24"><path d="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5l-9,-4zM10.94,16L7,12.06l1.41,-1.41 2.53,2.53 4.65,-4.65 1.41,1.42L10.94,16z"/></svg>
+      </div>
+      <h2>税务人工管理中心</h2>
+      <div class="tip">专属税费表单创建 · 生成 · 缴纳审核</div>
+      <div class="login-card">
+        <div class="field">
+          <label>管理员工号</label>
+          <input id="login-no" type="text" placeholder="请输入工号" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>登录口令</label>
+          <input id="login-pw" type="password" placeholder="请输入口令">
+        </div>
+        <div class="login-err" id="login-err"></div>
+        <button class="btn-primary" id="btn-login">登 录</button>
+      </div>
+      <div class="demo-note">
+        演示环境 · 数据仅保存在本浏览器<br>
+        演示账号：admin　口令：admin@123
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 工作台 ============ -->
+  <section class="view" id="view-console">
+    <header class="header">
+      <div class="url-bar">
+        <svg class="lock" viewBox="0 0 24 24"><path d="M18,8h-1V6c0,-2.76 -2.24,-5 -5,-5S7,3.24 7,6v2H6c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V10c0,-1.1 -0.9,-2 -2,-2zM12,17c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2 2,0.9 2,2 -0.9,2 -2,2zM15.1,8H8.9V6c0,-1.71 1.39,-3.1 3.1,-3.1s3.1,1.39 3.1,3.1v2z"/></svg>
+        <span class="url">https://etax.chinatax.gov.cn/admin</span>
+      </div>
+      <div class="htop">
+        <h1>税务人工管理中心</h1>
+        <button class="logout" id="btn-logout">退出</button>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><div class="num" id="st-forms">0</div><div class="lbl">已发布专属表单</div></div>
+      <div class="stat warn"><div class="num" id="st-pending">0</div><div class="lbl">待审核工单</div></div>
+      <div class="stat ok"><div class="num" id="st-approved">0</div><div class="lbl">本月审核通过</div></div>
+      <div class="stat no"><div class="num" id="st-rejected">0</div><div class="lbl">本月审核驳回</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" data-pane="forms">表单管理</div>
+      <div class="tab" data-pane="review">缴纳审核<span class="badge" id="badge-pending" style="display:none">0</span></div>
+    </div>
+
+    <!-- 表单管理 -->
+    <div class="pane on" id="pane-forms">
+      <div class="pane-head">
+        <div class="t">专属税费表单</div>
+        <button class="btn-add" id="btn-new-form">
+          <svg viewBox="0 0 24 24"><path d="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          新建表单
+        </button>
+      </div>
+      <div id="forms-list"></div>
+    </div>
+
+    <!-- 缴纳审核 -->
+    <div class="pane" id="pane-review">
+      <div class="pane-head"><div class="t">税费缴纳审核工单</div></div>
+      <div class="tabs" style="padding:0 0 10px;">
+        <div class="tab on" data-filter="pending">待审核</div>
+        <div class="tab" data-filter="approved">已通过</div>
+        <div class="tab" data-filter="rejected">已驳回</div>
+        <div class="tab" data-filter="all">全部</div>
+      </div>
+      <div id="records-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ 填报生成 ============ -->
+  <section class="view" id="view-fill">
+    <header class="header">
+      <div class="htop">
+        <div class="back" data-back="console"><svg viewBox="0 0 24 24"><path d="M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z"/></svg></div>
+        <h1>生成申报表</h1>
+      </div>
+    </header>
+    <div class="fill-body" id="fill-body"></div>
+    <div class="detail-foot">
+      <button class="btn-line" id="btn-preview">预览单据</button>
+      <button class="btn-primary" style="flex:1" id="btn-submit-record">提交并进入审核</button>
+    </div>
+  </section>
+
+  <!-- ============ 审核详情 ============ -->
+  <section class="view" id="view-detail">
+    <header class="header">
+      <div class="htop">
+        <div class="back" data-back="console"><svg viewBox="0 0 24 24"><path d="M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z"/></svg></div>
+        <h1>审核详情</h1>
+      </div>
+    </header>
+    <div class="fill-body" id="detail-body" style="flex:1;overflow-y:auto"></div>
+    <div class="detail-foot" id="detail-foot"></div>
+  </section>
+
+  <!-- ============ 新建/编辑表单 底部弹层 ============ -->
+  <div class="sheet-mask" id="sheet-form">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="t" id="sheet-form-title">新建专属表单</div>
+        <div class="x" data-close="sheet-form">×</div>
+      </div>
+      <div class="sheet-body">
+        <div class="field"><label>表单名称 *</label><input type="text" id="f-name" placeholder="如：增值税专属税费申报表（一般纳税人）"></div>
+        <div class="grid2">
+          <div class="field"><label>适用税种</label>
+            <select class="full" id="f-tax">
+              <option>增值税</option><option>企业所得税</option><option>个人所得税</option>
+              <option>消费税</option><option>印花税</option><option>城市维护建设税</option>
+              <option>附加税费</option><option>其他</option>
+            </select>
+          </div>
+          <div class="field"><label>表单版本</label><input type="text" id="f-ver" placeholder="如 V1.0"></div>
+        </div>
+        <div class="field"><label>适用对象说明</label><input type="text" id="f-target" placeholder="如：适用于一般纳税人按月申报"></div>
+        <div class="field">
+          <label>填报项目（加项 − 抵减 = 应纳税额）</label>
+          <div id="f-fields"></div>
+          <button class="btn-addline" id="btn-add-field">+ 添加填报项目</button>
+        </div>
+        <div class="field"><label>表单说明</label><textarea id="f-remark" placeholder="填报口径、注意事项等（选填）"></textarea></div>
+        <div class="sheet-foot">
+          <button class="btn-line" data-close="sheet-form">取消</button>
+          <button class="btn-primary" id="btn-save-form" style="flex:1">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- ============ 打印单据区 ============ -->
+<div id="print-area"><div class="doc" id="doc"></div></div>
+
+<script>
+/* ================= 数据层 ================= */
+var LS_FORMS = 'tax_admin_forms_v2';
+var LS_RECORDS = 'tax_admin_records_v2';
+var SESSION = 'tax_admin_session';
+var AUDITOR = '税务人工管理中心';
+
+function load(k, d){ try{ var v = JSON.parse(localStorage.getItem(k)); return v || d; }catch(e){ return d; } }
+function save(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+function uid(p){
+  var d = new Date(), s = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  var r = Math.floor(Math.random()*9000+1000);
+  return p + s + r;
+}
+function fmtDT(ts){
+  var d = new Date(ts);
+  function n(x){ return String(x).padStart(2,'0'); }
+  return d.getFullYear()+'-'+n(d.getMonth()+1)+'-'+n(d.getDate())+' '+n(d.getHours())+':'+n(d.getMinutes());
+}
+function fmtMoney(x){ return (Number(x)||0).toLocaleString('zh-CN',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function toast(msg){
+  var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._tm); t._tm = setTimeout(function(){ t.classList.remove('on'); }, 1800);
+}
+
+/* -------- 预置演示数据（仅首次） -------- */
+function seed(){
+  if (!localStorage.getItem(LS_FORMS)) {
+    save(LS_FORMS, [
+      {
+        id:'F20261018001', name:'增值税专属税费申报表（一般纳税人）', taxType:'增值税', ver:'V1.0',
+        target:'适用于一般纳税人按月申报，专属填报口径',
+        status:'published', remark:'金额单位：元，保留两位小数。',
+        fields:[
+          {label:'应税销售额', type:'money-none'},
+          {label:'销项税额', type:'money-add'},
+          {label:'进项税额', type:'money-sub'},
+          {label:'进项税额转出', type:'money-add'},
+          {label:'减免税额', type:'money-sub'}
+        ],
+        createdAt:Date.now()-5*864e5, updatedAt:Date.now()-5*864e5
+      },
+      {
+        id:'F20261020002', name:'小微企业所得税预缴专属申报表', taxType:'企业所得税', ver:'V0.9',
+        target:'适用于小型微利企业季度预缴',
+        status:'draft', remark:'草稿，待业务负责人确认口径。',
+        fields:[
+          {label:'利润总额', type:'money-none'},
+          {label:'纳税调整增加额', type:'money-add'},
+          {label:'实际已预缴所得税额', type:'money-sub'}
+        ],
+        createdAt:Date.now()-3*864e5, updatedAt:Date.now()-3*864e5
+      }
+    ]);
+  }
+  if (!localStorage.getItem(LS_RECORDS)) {
+    var now = Date.now();
+    save(LS_RECORDS, [
+      {
+        id:'R20261021001', formId:'F20261018001', formName:'增值税专属税费申报表（一般纳税人）', taxType:'增值税',
+        taxpayer:'杭州云栖科技有限公司', taxNo:'91330106MA27XXXX1A', phone:'138****6621',
+        periodStart:'2026-09-01', periodEnd:'2026-09-30', paid:20000,
+        values:{'应税销售额':800000,'销项税额':104000,'进项税额':72000,'进项税额转出':1600,'减免税额':5000},
+        total:28600, due:8600,
+        status:'pending', submitAt:now-26*36e5, review:null,
+        logs:[{at:now-26*36e5, text:'纳税人提交申报，等待审核'}]
+      },
+      {
+        id:'R20261019002', formId:'F20261018001', formName:'增值税专属税费申报表（一般纳税人）', taxType:'增值税',
+        taxpayer:'宁波海曙贸易商行', taxNo:'91330203MA28XXXX6B', phone:'139****0847',
+        periodStart:'2026-08-01', periodEnd:'2026-08-31', paid:0,
+        values:{'应税销售额':300000,'销项税额':39000,'进项税额':24000,'进项税额转出':0,'减免税额':0},
+        total:15000, due:15000,
+        status:'approved', submitAt:now-4*864e5,
+        review:{auditor:'管理员（admin）', opinion:'申报数据与开票数据核对一致，准予通过。', at:now-3.8*864e5},
+        logs:[{at:now-4*864e5,text:'纳税人提交申报，等待审核'},{at:now-3.8*864e5,text:'审核通过：申报数据与开票数据核对一致，准予通过。'}]
+      },
+      {
+        id:'R20261018003', formId:'F20261018001', formName:'增值税专属税费申报表（一般纳税人）', taxType:'增值税',
+        taxpayer:'温州瓯海五金加工厂', taxNo:'91330304MA29XXXX3C', phone:'137****5510',
+        periodStart:'2026-08-01', periodEnd:'2026-08-31', paid:0,
+        values:{'应税销售额':120000,'销项税额':15600,'进项税额':30000,'进项税额转出':0,'减免税额':0},
+        total:-14400, due:-14400,
+        status:'rejected', submitAt:now-5*864e5,
+        review:{auditor:'管理员（admin）', opinion:'进项税额大于销项税额且未填报留抵说明，请补充资料后重新申报。', at:now-4.6*864e5},
+        logs:[{at:now-5*864e5,text:'纳税人提交申报，等待审核'},{at:now-4.6*864e5,text:'审核驳回：进项税额大于销项税额且未填报留抵说明，请补充资料后重新申报。'}]
+      }
+    ]);
+  }
+}
+
+/* ================= 视图切换 ================= */
+function showView(id){
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('on'); });
+  document.getElementById('view-'+id).classList.add('on');
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('[data-back]').forEach(function(b){
+  b.addEventListener('click', function(){ showView(b.getAttribute('data-back')); renderConsole(); });
+});
+
+/* ================= 登录 ================= */
+function tryLogin(){
+  var no = document.getElementById('login-no').value.trim();
+  var pw = document.getElementById('login-pw').value;
+  var err = document.getElementById('login-err');
+  if (no === 'admin' && pw === 'admin@123') {
+    sessionStorage.setItem(SESSION, no);
+    err.textContent = '';
+    enterConsole();
+  } else {
+    err.textContent = '工号或口令不正确（演示账号 admin / admin@123）';
+  }
+}
+document.getElementById('btn-login').addEventListener('click', tryLogin);
+document.getElementById('login-pw').addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
+document.getElementById('btn-logout').addEventListener('click', function(){
+  sessionStorage.removeItem(SESSION); showView('login');
+  document.getElementById('login-pw').value='';
+});
+function enterConsole(){ showView('console'); renderConsole(); }
+
+/* ================= 工作台渲染 ================= */
+var reviewFilter = 'pending';
+function renderConsole(){
+  var forms = load(LS_FORMS, []);
+  var records = load(LS_RECORDS, []);
+  var nowMonth = new Date().getMonth();
+  document.getElementById('st-forms').textContent = forms.filter(function(f){return f.status==='published';}).length;
+  document.getElementById('st-pending').textContent = records.filter(function(r){return r.status==='pending';}).length;
+  document.getElementById('st-approved').textContent = records.filter(function(r){return r.status==='approved' && new Date(r.submitAt).getMonth()===nowMonth;}).length;
+  document.getElementById('st-rejected').textContent = records.filter(function(r){return r.status==='rejected' && new Date(r.submitAt).getMonth()===nowMonth;}).length;
+  var pendN = records.filter(function(r){return r.status==='pending';}).length;
+  var badge = document.getElementById('badge-pending');
+  badge.style.display = pendN ? 'inline-block' : 'none'; badge.textContent = pendN;
+  renderForms(forms);
+  renderRecords(records);
+}
+
+/* ---------- Tab 切换 ---------- */
+document.querySelectorAll('#view-console .tabs .tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    if (t.hasAttribute('data-pane')) {
+      document.querySelectorAll('#view-console .tabs .tab[data-pane]').forEach(function(x){x.classList.remove('on');});
+      t.classList.add('on');
+      document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('on');});
+      document.getElementById('pane-'+t.getAttribute('data-pane')).classList.add('on');
+    } else if (t.hasAttribute('data-filter')) {
+      reviewFilter = t.getAttribute('data-filter');
+      document.querySelectorAll('.tab[data-filter]').forEach(function(x){x.classList.remove('on');});
+      t.classList.add('on');
+      renderRecords(load(LS_RECORDS, []));
+    }
+  });
+});
+
+/* ================= 表单管理 ================= */
+function renderForms(forms){
+  var box = document.getElementById('forms-list');
+  if (!forms.length) { box.innerHTML = '<div class="empty-box">还没有专属表单，点击右上角新建</div>'; return; }
+  box.innerHTML = forms.map(function(f){
+    var n = recordsUsing(f.id);
+    return '<div class="item">' +
+      '<div class="row1"><div class="name">'+esc(f.name)+'</div>' +
+        '<span class="tag tax">'+esc(f.taxType)+'</span>' +
+        '<span class="tag '+(f.status==='published'?'pub':'draft')+'">'+(f.status==='published'?'已发布':'草稿')+'</span></div>' +
+      '<div class="row2">编号 '+f.id+' · '+esc(f.ver||'V1.0')+' · 填报项目 '+f.fields.length+' 项<br>'+
+        esc(f.target||'—')+' · 已生成申报 '+n+' 份</div>' +
+      '<div class="ops">' +
+        (f.status==='draft'
+          ? '<span class="op solid" data-act="publish" data-id="'+f.id+'">发布</span>'
+          : '<span class="op solid" data-act="fill" data-id="'+f.id+'">填报生成</span>') +
+        '<span class="op" data-act="edit" data-id="'+f.id+'">编辑</span>' +
+        (f.status==='published' ? '<span class="op gray" data-act="fill2" data-id="'+f.id+'">继续生成</span>' : '') +
+        '<span class="op danger" data-act="del" data-id="'+f.id+'">删除</span>' +
+      '</div></div>';
+  }).join('');
+}
+function recordsUsing(formId){ return load(LS_RECORDS,[]).filter(function(r){return r.formId===formId;}).length; }
+
+document.getElementById('forms-list').addEventListener('click', function(e){
+  var op = e.target.closest('.op'); if(!op) return;
+  var id = op.getAttribute('data-id'), act = op.getAttribute('data-act');
+  var forms = load(LS_FORMS, []), f = forms.filter(function(x){return x.id===id;})[0];
+  if (!f) return;
+  if (act==='publish') { f.status='published'; f.updatedAt=Date.now(); save(LS_FORMS,forms); toast('已发布'); renderConsole(); }
+  else if (act==='fill' || act==='fill2') { openFill(f); }
+  else if (act==='edit') { openFormSheet(f); }
+  else if (act==='del') {
+    if (recordsUsing(id) > 0) { toast('该表单已有申报记录，不能删除'); return; }
+    if (confirm('确定删除表单「'+f.name+'」？')) {
+      save(LS_FORMS, forms.filter(function(x){return x.id!==id;}));
+      toast('已删除'); renderConsole();
+    }
+  }
+});
+
+/* ---------- 新建/编辑弹层 ---------- */
+var editingId = null;
+document.getElementById('btn-new-form').addEventListener('click', function(){ openFormSheet(null); });
+function openFormSheet(f){
+  editingId = f ? f.id : null;
+  document.getElementById('sheet-form-title').textContent = f ? '编辑专属表单' : '新建专属表单';
+  document.getElementById('f-name').value = f ? f.name : '';
+  document.getElementById('f-tax').value = f ? f.taxType : '增值税';
+  document.getElementById('f-ver').value = f ? (f.ver||'V1.0') : 'V1.0';
+  document.getElementById('f-target').value = f ? (f.target||'') : '';
+  document.getElementById('f-remark').value = f ? (f.remark||'') : '';
+  renderFieldEditor(f ? f.fields : [{label:'',type:'money-add'}]);
+  document.getElementById('sheet-form').classList.add('on');
+}
+document.querySelectorAll('[data-close]').forEach(function(x){
+  x.addEventListener('click', function(){ document.getElementById('sheet-'+x.getAttribute('data-close')).classList.remove('on'); });
+});
+function renderFieldEditor(fields){
+  document.getElementById('f-fields').innerHTML = fields.map(function(fd, i){
+    return '<div class="field-row">' +
+      '<input type="text" data-role="label" placeholder="项目名称，如：销项税额" value="'+esc(fd.label)+'">' +
+      '<select data-role="type">' +
+        '<option value="money-add"'+(fd.type==='money-add'?' selected':'')+'>金额·加项</option>' +
+        '<option value="money-sub"'+(fd.type==='money-sub'?' selected':'')+'>金额·抵减</option>' +
+        '<option value="money-none"'+(fd.type==='money-none'||fd.type==='money'?' selected':'')+'>金额·不计税</option>' +
+        '<option value="text"'+(fd.type==='text'?' selected':'')+'>文本</option>' +
+        '<option value="date"'+(fd.type==='date'?' selected':'')+'>日期</option>' +
+      '</select>' +
+      '<button class="del" data-role="del">×</button></div>';
+  }).join('');
+}
+document.getElementById('btn-add-field').addEventListener('click', function(){
+  var rows = collectFieldRows(); rows.push({label:'',type:'money-add'}); renderFieldEditor(rows);
+});
+document.getElementById('f-fields').addEventListener('click', function(e){
+  if (e.target.getAttribute('data-role')==='del') {
+    var rows = collectFieldRows();
+    var idx = Array.prototype.indexOf.call(document.querySelectorAll('#f-fields .field-row'), e.target.closest('.field-row'));
+    rows.splice(idx,1);
+    if (!rows.length) rows.push({label:'',type:'money-add'});
+    renderFieldEditor(rows);
+  }
+});
+function collectFieldRows(){
+  return Array.prototype.map.call(document.querySelectorAll('#f-fields .field-row'), function(row){
+    return {
+      label: row.querySelector('[data-role=label]').value.trim(),
+      type: row.querySelector('[data-role=type]').value
+    };
+  });
+}
+document.getElementById('btn-save-form').addEventListener('click', function(){
+  var name = document.getElementById('f-name').value.trim();
+  if (!name) { toast('请填写表单名称'); return; }
+  var fields = collectFieldRows().filter(function(f){return f.label;});
+  if (!fields.length) { toast('至少添加一个填报项目'); return; }
+  var uniq = {};
+  for (var i=0;i<fields.length;i++){ if(uniq[fields[i].label]){ toast('项目名称重复：'+fields[i].label); return;} uniq[fields[i].label]=1; }
+  var forms = load(LS_FORMS, []);
+  var payload = {
+    name:name,
+    taxType:document.getElementById('f-tax').value,
+    ver:document.getElementById('f-ver').value.trim()||'V1.0',
+    target:document.getElementById('f-target').value.trim(),
+    remark:document.getElementById('f-remark').value.trim(),
+    fields:fields
+  };
+  if (editingId) {
+    var f = forms.filter(function(x){return x.id===editingId;})[0];
+    Object.assign(f, payload, {updatedAt:Date.now()});
+    toast('已保存修改');
+  } else {
+    forms.unshift(Object.assign({id:uid('F'), status:'draft', createdAt:Date.now(), updatedAt:Date.now()}, payload));
+    toast('已创建（草稿），发布后可填报');
+  }
+  save(LS_FORMS, forms);
+  document.getElementById('sheet-form').classList.remove('on');
+  renderConsole();
+});
+
+/* ================= 填报生成 ================= */
+var fillingForm = null;
+function openFill(f){
+  fillingForm = f;
+  var today = new Date();
+  var pStart = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-01';
+  var body =
+    '<div class="sec-title">纳税人信息</div><div class="card-box"><div class="grid2">' +
+      '<div class="field"><label>纳税人名称 *</label><input class="full" id="r-name" type="text" placeholder="企业/个人全称"></div>' +
+      '<div class="field"><label>纳税人识别号 *</label><input class="full" id="r-no" type="text" placeholder="统一社会信用代码"></div>' +
+    '</div><div class="grid2">' +
+      '<div class="field"><label>联系电话</label><input class="full" id="r-phone" type="tel" placeholder="选填"></div>' +
+      '<div class="field"><label>税种</label><input class="full" value="'+esc(f.taxType)+'" disabled></div>' +
+    '</div><div class="grid2">' +
+      '<div class="field"><label>税款所属期起</label><input class="full" id="r-ps" type="date" value="'+pStart+'"></div>' +
+      '<div class="field"><label>税款所属期止</label><input class="full" id="r-pe" type="date"></div>' +
+    '</div></div>' +
+    '<div class="sec-title">申报明细（按「'+esc(f.name)+'」）</div><div class="card-box" id="r-fields">' +
+      f.fields.map(function(fd){
+        var input = fd.type.indexOf('money')===0
+          ? '<input class="full r-val" type="number" min="0" step="0.01" data-label="'+esc(fd.label)+'" data-type="'+fd.type+'" placeholder="0.00">'
+          : fd.type==='date'
+          ? '<input class="full r-val" type="date" data-label="'+esc(fd.label)+'" data-type="date">'
+          : '<input class="full r-val" type="text" data-label="'+esc(fd.label)+'" data-type="text">';
+        var suffix = fd.type==='money-add' ? '（加项·元）'
+          : fd.type==='money-sub' ? '（抵减·元）'
+          : fd.type.indexOf('money')===0 ? '（元）' : '';
+        return '<div class="field"><label>'+esc(fd.label)+suffix+'</label>'+input+'</div>';
+      }).join('') +
+      '<div class="field"><label>已缴税额（元）</label><input class="full r-val" id="r-paid" type="number" min="0" step="0.01" value="0" placeholder="0.00"></div>' +
+    '</div>' +
+    '<div class="card-box">' +
+      '<div class="kv"><div class="k">应纳税额合计</div><div class="v" id="sum-total">0.00</div></div>' +
+      '<div class="kv"><div class="k">已缴税额</div><div class="v" id="sum-paid">0.00</div></div>' +
+      '<div class="kv total"><div class="k">本期应补（退）税额</div><div class="v" id="sum-due">0.00</div></div>' +
+    '</div>' +
+    (f.remark ? '<div class="sec-title">填报说明</div><div class="card-box" style="font-size:12px;color:#6B7888;line-height:1.8;padding:12px 14px">'+esc(f.remark)+'</div>' : '');
+  document.getElementById('fill-body').innerHTML = body;
+  bindFillCalc();
+  showView('fill');
+}
+function collectFill(){
+  var values = {};
+  document.querySelectorAll('#r-fields .r-val').forEach(function(inp){
+    var lbl = inp.getAttribute('data-label');
+    if (!lbl) return;
+    var type = inp.getAttribute('data-type');
+    values[lbl] = type.indexOf('money')===0 ? Number(inp.value)||0 : inp.value.trim();
+  });
+  var paid = Number(document.getElementById('r-paid').value)||0;
+  var total = fillingForm.fields
+    .reduce(function(sum, fd){
+      if (fd.type === 'money-add') return sum + (Number(values[fd.label])||0);
+      if (fd.type === 'money-sub') return sum - (Number(values[fd.label])||0);
+      return sum;
+    }, 0);
+  var name = document.getElementById('r-name').value.trim();
+  var taxNo = document.getElementById('r-no').value.trim();
+  return {
+    values:values, paid:paid, total:Math.round(total*100)/100, due:Math.round((total-paid)*100)/100,
+    name:name, taxNo:taxNo,
+    phone:document.getElementById('r-phone').value.trim(),
+    periodStart:document.getElementById('r-ps').value, periodEnd:document.getElementById('r-pe').value
+  };
+}
+function bindFillCalc(){
+  document.querySelectorAll('#r-fields .r-val').forEach(function(inp){
+    inp.addEventListener('input', updateSum);
+  });
+}
+function updateSum(){
+  var d = collectFill();
+  document.getElementById('sum-total').textContent = fmtMoney(d.total);
+  document.getElementById('sum-paid').textContent = fmtMoney(d.paid);
+  document.getElementById('sum-due').textContent = fmtMoney(d.due);
+}
+document.getElementById('btn-preview').addEventListener('click', function(){
+  var d = collectFill();
+  if (!d.name || !d.taxNo) { toast('请先填写纳税人名称和识别号'); return; }
+  buildDoc(fillingForm, d, null, false);
+  setTimeout(function(){ window.print(); }, 100);
+});
+document.getElementById('btn-submit-record').addEventListener('click', function(){
+  var d = collectFill();
+  if (!d.name || !d.taxNo) { toast('请先填写纳税人名称和识别号'); return; }
+  if (!d.periodStart || !d.periodEnd) { toast('请选择税款所属期'); return; }
+  var now = Date.now();
+  var rec = {
+    id:uid('R'), formId:fillingForm.id, formName:fillingForm.name, taxType:fillingForm.taxType,
+    taxpayer:d.name, taxNo:d.taxNo, phone:d.phone||'—',
+    periodStart:d.periodStart, periodEnd:d.periodEnd, paid:d.paid,
+    values:d.values, total:d.total, due:d.due,
+    status:'pending', submitAt:now, review:null,
+    logs:[{at:now, text:'纳税人提交申报，等待审核'}]
+  };
+  var records = load(LS_RECORDS, []); records.unshift(rec); save(LS_RECORDS, records);
+  toast('已提交，工单进入待审核');
+  reviewFilter = 'pending';
+  document.querySelectorAll('.tab[data-filter]').forEach(function(x){
+    x.classList.toggle('on', x.getAttribute('data-filter')==='pending');
+  });
+  showView('console'); renderConsole();
+});
+
+/* ---------- 打印单据 ---------- */
+function buildDoc(f, d, rec, reviewed){
+  var rows = f.fields.map(function(fd){
+    var v = d.values[fd.label];
+    return '<tr><td class="lab">'+esc(fd.label)+'</td>' +
+      (fd.type.indexOf('money')===0
+        ? '<td class="right">'+fmtMoney(v)+'</td>'
+        : '<td>'+esc(v||'—')+'</td>') + '</tr>';
+  }).join('');
+  var stTxt = reviewed
+    ? (rec.status==='approved' ? '<span class="watermark">审核通过</span>' : '<span class="watermark">审核驳回</span>')
+    : '<span class="watermark">演示单据 非正式税务文书</span>';
+  document.getElementById('doc').innerHTML =
+    '<div class="doc-no">表单编号：'+f.id+'　单据编号：'+(rec?rec.id:'（未提交）')+'</div>' +
+    '<div class="doc-title">'+esc(f.name)+'</div>' +
+    '<div class="doc-sub">'+stTxt+'税务人工管理中心（演示）生成</div>' +
+    '<table>' +
+      '<tr><td class="lab">纳税人名称</td><td>'+esc(d.name)+'</td><td class="lab">纳税人识别号</td><td>'+esc(d.taxNo)+'</td></tr>' +
+      '<tr><td class="lab">税款所属期</td><td>'+esc(d.periodStart)+' 至 '+esc(d.periodEnd)+'</td><td class="lab">联系电话</td><td>'+esc(d.phone||'—')+'</td></tr>' +
+    '</table>' +
+    '<table><tr><th style="width:60%">项目</th><th>金额 / 内容（元）</th></tr>' + rows +
+      '<tr><td class="lab">已缴税额</td><td class="right">'+fmtMoney(d.paid)+'</td></tr>' +
+      '<tr><td class="lab"><b>本期应补（退）税额</b></td><td class="right"><b>'+fmtMoney(d.due)+'</b></td></tr>' +
+    '</table>' +
+    (reviewed && rec.review
+      ? '<table><tr><td class="lab">审核结果</td><td>'+(rec.status==='approved'?'通过':'驳回')+'</td></tr>' +
+        '<tr><td class="lab">审核人</td><td>'+esc(rec.review.auditor)+'　'+fmtDT(rec.review.at)+'</td></tr>' +
+        '<tr><td class="lab">审核意见</td><td>'+esc(rec.review.opinion)+'</td></tr></table>'
+      : '') +
+    '<div class="sign"><span>纳税人（签章）：__________</span><span>税务机关（签章）：__________</span></div>' +
+    '<div class="doc-note">本单据由税务人工管理中心演示系统生成，数据保存在本地浏览器，不作为正式申报或缴税凭证。生成时间：'+fmtDT(Date.now())+'</div>';
+}
+
+/* ================= 缴纳审核 ================= */
+var STATUS_TXT = {pending:'待审核', approved:'已通过', rejected:'已驳回'};
+function renderRecords(records){
+  var list = records.filter(function(r){
+    return reviewFilter==='all' ? true : r.status===reviewFilter;
+  });
+  var box = document.getElementById('records-list');
+  if (!list.length) { box.innerHTML='<div class="empty-box">'+(reviewFilter==='pending'?'暂无待审核工单':'暂无'+STATUS_TXT[reviewFilter]+'工单')+'</div>'; return; }
+  box.innerHTML = list.map(function(r){
+    return '<div class="item" data-rid="'+r.id+'">' +
+      '<div class="row1"><div class="name">'+esc(r.taxpayer)+'</div><span class="tag '+r.status+'">'+STATUS_TXT[r.status]+'</span></div>' +
+      '<div class="row2">' +
+        esc(r.formName) + '<br>' +
+        '工单 '+r.id+' · '+esc(r.taxType)+' · 所属期 '+esc(r.periodStart)+'~'+esc(r.periodEnd)+'<br>' +
+        '应补（退）税额 <span class="amount">¥'+fmtMoney(r.due)+'</span> · 提交于 '+fmtDT(r.submitAt) +
+      '</div>' +
+      '<div class="ops"><span class="op solid">查看 / 审核</span></div>' +
+    '</div>';
+  }).join('');
+}
+document.getElementById('records-list').addEventListener('click', function(e){
+  var card = e.target.closest('.item'); if(!card) return;
+  openDetail(card.getAttribute('data-rid'));
+});
+
+var currentRid = null;
+function openDetail(rid){
+  currentRid = rid;
+  var r = load(LS_RECORDS,[]).filter(function(x){return x.id===rid;})[0];
+  var f = load(LS_FORMS,[]).filter(function(x){return x.id===r.formId;})[0] || {fields:[],remark:''};
+  var detailRows = (f.fields||[]).map(function(fd){
+    var v = r.values[fd.label];
+    return '<div class="kv"><div class="k">'+esc(fd.label)+'</div><div class="v">'+(fd.type.indexOf('money')===0?'¥'+fmtMoney(v):esc(v||'—'))+'</div></div>';
+  }).join('');
+  document.getElementById('detail-body').innerHTML =
+    '<div class="sec-title">工单信息</div>' +
+    '<div class="card-box">' +
+      '<div class="kv"><div class="k">工单编号</div><div class="v">'+esc(r.id)+'</div></div>' +
+      '<div class="kv"><div class="k">当前状态</div><div class="v"><span class="tag '+r.status+'">'+STATUS_TXT[r.status]+'</span></div></div>' +
+      '<div class="kv"><div class="k">表单</div><div class="v">'+esc(r.formName)+'</div></div>' +
+    '</div>' +
+    '<div class="sec-title">纳税人信息</div>' +
+    '<div class="card-box">' +
+      '<div class="kv"><div class="k">纳税人名称</div><div class="v">'+esc(r.taxpayer)+'</div></div>' +
+      '<div class="kv"><div class="k">纳税人识别号</div><div class="v">'+esc(r.taxNo)+'</div></div>' +
+      '<div class="kv"><div class="k">联系电话</div><div class="v">'+esc(r.phone)+'</div></div>' +
+      '<div class="kv"><div class="k">税款所属期</div><div class="v">'+esc(r.periodStart)+' 至 '+esc(r.periodEnd)+'</div></div>' +
+    '</div>' +
+    '<div class="sec-title">申报明细</div>' +
+    '<div class="card-box">' + detailRows +
+      '<div class="kv"><div class="k">已缴税额</div><div class="v">¥'+fmtMoney(r.paid)+'</div></div>' +
+      '<div class="kv total"><div class="k">本期应补（退）</div><div class="v">¥'+fmtMoney(r.due)+'</div></div>' +
+    '</div>' +
+    '<div class="sec-title">审核流转</div>' +
+    '<div class="card-box"><div class="timeline">' +
+      r.logs.map(function(lg, i){
+        var cls = i===0 ? (r.status==='pending'?'cur':'') : (r.status==='approved'?'ok':'no');
+        return '<div class="tl-item '+cls+'"><div class="tl-dot"></div><div class="tl-text">'+esc(lg.text)+'<small>'+fmtDT(lg.at)+'</small></div></div>';
+      }).join('') +
+    '</div></div>' +
+    (r.review
+      ? '<div class="sec-title">审核意见</div><div class="card-box" style="font-size:13px;line-height:1.8;padding:12px 14px">'+
+        '<div style="margin-bottom:6px"><b>'+(r.status==='approved'?'通过':'驳回')+'</b>　'+esc(r.review.auditor)+'　'+fmtDT(r.review.at)+'</div>'+
+        esc(r.review.opinion)+'</div>'
+      : '<div class="sec-title">审核意见</div><div class="card-box" style="padding:12px 14px"><textarea class="review-opinion" id="review-opinion" placeholder="请填写审核意见（通过/驳回均建议填写）"></textarea></div>'
+    );
+  var foot = document.getElementById('detail-foot');
+  if (r.status==='pending') {
+    foot.innerHTML = '<button class="btn-reject" id="btn-reject">驳回</button><button class="btn-approve" id="btn-approve">审核通过</button>';
+    document.getElementById('btn-approve').addEventListener('click', function(){ doReview('approved'); });
+    document.getElementById('btn-reject').addEventListener('click', function(){ doReview('rejected'); });
+  } else {
+    foot.innerHTML = '<button class="btn-line" id="btn-reprint">导出/打印审核单据</button>';
+    document.getElementById('btn-reprint').addEventListener('click', function(){
+      var d = {name:r.taxpayer, taxNo:r.taxNo, phone:r.phone, periodStart:r.periodStart, periodEnd:r.periodEnd,
+               values:r.values, paid:r.paid, total:r.total, due:r.due};
+      buildDoc(f, d, r, true);
+      setTimeout(function(){ window.print(); }, 100);
+    });
+  }
+  showView('detail');
+}
+function doReview(result){
+  var records = load(LS_RECORDS, []);
+  var r = records.filter(function(x){return x.id===currentRid;})[0];
+  var opEl = document.getElementById('review-opinion');
+  var opinion = opEl ? opEl.value.trim() : '';
+  if (!opinion) {
+    opinion = result==='approved' ? '资料齐全，数据核对无误，审核通过。' : '申报资料/数据存疑，请补充后重新申报。';
+  }
+  var now = Date.now();
+  r.status = result;
+  r.review = {auditor:'管理员（admin）', opinion:opinion, at:now};
+  r.logs.push({at:now, text:(result==='approved'?'审核通过：':'审核驳回：')+opinion});
+  save(LS_RECORDS, records);
+  toast(result==='approved'?'已审核通过':'已驳回');
+  showView('console'); renderConsole();
+}
+
+/* ================= 启动 ================= */
+seed();
+if (sessionStorage.getItem(SESSION)) enterConsole();
+</script>
+</body>
+</html>
