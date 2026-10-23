@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>离岸信托终止（清算）环节个人所得税专属申报表 · 演示样例</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"SimSun","Songti SC",serif; background:#8a94a3; padding:24px 12px; color:#1a1a1a; }
+  .page {
+    max-width:840px; margin:0 auto; background:#fff; padding:34px 46px 18px;
+    box-shadow:0 4px 30px rgba(0,0,0,.25); position:relative;
+  }
+  .demo-stamp {
+    position:absolute; top:6px; right:24px; border:2px solid #c0392b; color:#c0392b;
+    font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px;
+    transform:rotate(-7deg); letter-spacing:1.5px; font-family:"Microsoft YaHei",sans-serif;
+  }
+  h1 { text-align:center; font-size:20px; letter-spacing:0; margin:16px 0 3px; }
+  .sub { text-align:center; font-size:13px; color:#333; margin-bottom:3px; }
+  .basis {
+    font-size:11px; color:#444; text-align:center; font-family:"Microsoft YaHei",sans-serif;
+    background:#f4f7fb; border:1px solid #dce6f2; border-radius:6px; padding:5px 8px; margin:7px 0;
+    line-height:1.6;
+  }
+  .meta-line { display:flex; justify-content:space-between; font-size:11.5px; margin:5px 1px; }
+  table { width:100%; border-collapse:collapse; margin-bottom:7px; }
+  th, td { border:1px solid #333; padding:4px 8px; font-size:12px; vertical-align:middle; }
+  thead th { background:#f0f4f9; font-weight:700; text-align:center; }
+  .lab { background:#f7f9fc; width:158px; color:#222; }
+  .group-head td { background:#eaf1fa; font-weight:700; }
+  .r { text-align:right; font-variant-numeric:tabular-nums; }
+  .calc-total td { background:#fbf6e8; font-weight:700; }
+  .calc-due td { background:#fdecea; font-weight:700; }
+  .decl {
+    border:1px solid #333; padding:8px 12px; font-size:12px; line-height:1.9; margin-bottom:7px;
+  }
+  .sign-row { display:flex; justify-content:space-between; margin-top:5px; font-size:12px; }
+  .pay-note {
+    border:1px dashed #c0392b; color:#8c2a1f; background:#fff8f7; border-radius:6px;
+    padding:6px 10px; font-size:10.5px; line-height:1.6; margin-bottom:7px;
+    font-family:"Microsoft YaHei",sans-serif;
+  }
+  .ok-badge { color:#1A9E5B; font-weight:700; }
+  .footline { text-align:center; font-size:12px; letter-spacing:5px; margin:3px 0 5px; font-weight:700; }
+  .note {
+    font-size:10px; color:#777; border-top:1px dashed #bbb; margin-top:5px; padding-top:6px; line-height:1.5;
+    font-family:"Microsoft YaHei",sans-serif;
+  }
+  .bar { max-width:840px; margin:14px auto 0; text-align:center; font-family:"Microsoft YaHei",sans-serif; }
+  .bar button {
+    background:#005BAC; color:#fff; border:none; border-radius:20px; padding:10px 26px;
+    font-size:14px; cursor:pointer; margin:0 6px;
+  }
+  .bar span { color:#e8edf4; font-size:12px; }
+  @media print {
+    body { background:#fff; padding:0; }
+    .page { box-shadow:none; max-width:none; padding:14px 22px 8px; }
+    h1 { margin-top:12px; }
+    .demo-stamp { top:3px; }
+    .bar { display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="demo-stamp">演示样例 · 非正式税务文书</div>
+
+  <h1>离岸信托终止（清算）环节个人所得税专属申报表</h1>
+  <div class="sub">税目：利息、股息、红利所得　｜　适用税率：20%</div>
+  <div class="basis">
+    政策依据：《财政部 税务总局关于离岸信托个人所得税有关事项的公告》（2026年第21号）第五条、第十条、第十五条；
+    《国家税务总局关于离岸信托个人所得税有关征管事项的公告》（2026年第15号）。申报期限：清算完成之日次月15日内。
+  </div>
+
+  <div class="meta-line">
+    <span>表单编号：F202610237284</span>
+    <span>单据编号：R202610231444</span>
+  </div>
+
+  <table>
+    <tbody>
+      <tr class="group-head"><td colspan="4">一、离岸信托与受托人信息（演示虚构）</td></tr>
+      <tr><td class="lab">信托名称</td><td colspan="3">阳光家族信托（Sunshine Family Trust）</td></tr>
+      <tr><td class="lab">信托设立地</td><td>英属维尔京群岛（BVI）</td><td class="lab">受托人</td><td>Pacific Trust Company (BVI) Ltd</td></tr>
+      <tr><td class="lab">信托设立日期</td><td>2018-06-15</td><td class="lab">信托终止日期</td><td>2026-09-30</td></tr>
+      <tr><td class="lab">清算完成日期</td><td>2026-10-15</td><td class="lab">信托财产构成</td><td>境外银行存款、香港上市公司股票、非上市股权</td></tr>
+
+      <tr class="group-head"><td colspan="4">二、纳税人信息（演示虚构）</td></tr>
+      <tr><td class="lab">*纳税人姓名</td><td>李明</td><td class="lab">*身份证件类型及号码</td><td>居民身份证 310101198505201234</td></tr>
+      <tr><td class="lab">税收居民身份</td><td>有住所居民个人</td><td class="lab">联系电话</td><td>13900001111</td></tr>
+      <tr><td class="lab">境外完税凭证号码</td><td>HK/2026/CR-88421</td><td class="lab">5年分期缴纳备案</td><td>否</td></tr>
+
+      <tr class="group-head"><td colspan="4">三、清算收益与应纳税额计算（单位：人民币元）</td></tr>
+      <tr><td class="lab">① 终止时全部信托财产市场价值</td><td class="r">12,000,000.00</td><td class="lab">② 信托财产原值</td><td class="r">8,000,000.00</td></tr>
+      <tr><td class="lab">③ 合理费用<span style="font-size:10px;color:#888">（不含受托人报酬、信托管理费等不得抵减项目）</span></td><td class="r">200,000.00</td><td class="lab">④ 清算收益＝①－②－③</td><td class="r">3,800,000.00</td></tr>
+      <tr class="calc-total"><td class="lab">⑤ 应纳个人所得税额＝④×20%</td><td class="r">760,000.00</td><td class="lab">⑥ 境外已纳个人所得税抵免额</td><td class="r">60,000.00</td></tr>
+      <tr><td class="lab">⑦ 已缴（预扣预缴）税额</td><td class="r">0.00</td><td class="lab">抵免后应纳税额＝⑤－⑥</td><td class="r">700,000.00</td></tr>
+      <tr class="calc-due"><td class="lab">本期应补（退）税额</td><td colspan="3" class="r">人民币（大写）柒拾万元整　　￥700,000.00</td></tr>
+    </tbody>
+  </table>
+
+  <div class="pay-note">
+    缴税提示：税款仅通过自然人电子税务局（https://etax.chinatax.gov.cn）、办税服务厅或银行缴入<b>国库</b>；
+    税务机关<b>不接受</b> USDT、TRX 等任何虚拟货币缴税，也不存在"先向指定钱包转账才能清算放款"的规定。凡要求向个人账户或加密钱包汇"税款"的，均为诈骗。
+  </div>
+
+  <div class="decl">
+    谨声明：此表是根据《中华人民共和国个人所得税法》及其实施条例、财政部 税务总局公告2026年第21号等规定填报的，是真实的、可靠的、完整的。
+    <div class="sign-row">
+      <span>纳税人（签字）：李明</span>
+      <span>2026 年 10 月 23 日</span>
+    </div>
+  </div>
+
+  <table>
+    <tbody>
+      <tr><td class="lab">审核结果</td><td class="ok-badge" colspan="3">✔ 审核通过</td></tr>
+      <tr><td class="lab">审核人 / 时间</td><td colspan="3">管理员（admin）　2026-10-23</td></tr>
+      <tr><td class="lab">审核意见</td><td colspan="3">清算市值、原值、合理费用资料齐全，清算收益380万元，按20%计税76万元；境外已纳税款6万元凭证在抵免限额内，同意抵免，应补70万元。</td></tr>
+      <tr><td class="lab">流转记录</td><td colspan="3">2026-10-23 提交申报 → 同日审核通过（工单 R202610231444）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footline">演 示 单 据 · 非 税 收 票 证</div>
+
+  <div class="note">
+    1. 本件由「税务人工管理中心」演示系统生成，计税口径引自财政部 税务总局公告2026年第21号、税务总局公告2026年第15号公开发布文本。<br>
+    2. 信托、受托人、纳税人、证件号、凭证号等均为<b>虚构演示数据</b>，不构成正式申报或办税凭证，不具法律效力；正式申报请通过自然人电子税务局或主管税务机关办理。
+  </div>
+</div>
+
+<div class="bar">
+  <button onclick="window.print()">打印 / 另存为 PDF</button>
+  <span>浏览器打印中选择“另存为 PDF”即可导出</span>
+</div>
+</body>
+</html>
