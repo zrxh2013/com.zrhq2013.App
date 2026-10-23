@@ -153,6 +153,25 @@
 
   .tax-hint { font-size:11px; color:#7A8699; margin-top:7px; line-height:1.7; }
   .tax-hint b { color:#005BAC; font-weight:600; }
+
+  /* 官方模板库 */
+  .tpl-note {
+    font-size:11px; color:#7A8699; background:#F2F7FD; border:1px solid #DCEBFB;
+    border-radius:10px; padding:9px 12px; margin-bottom:12px; line-height:1.7;
+  }
+  .tpl-card {
+    border:1px solid #E2E8F0; border-radius:14px; padding:14px; margin-bottom:10px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .tpl-card .tc-top { display:flex; align-items:center; gap:8px; }
+  .tpl-card .tc-name { font-size:14px; font-weight:600; flex:1; line-height:1.4; }
+  .tpl-card .tc-desc { font-size:12px; color:#6B7888; line-height:1.7; }
+  .tpl-card .tc-src { font-size:11px; color:#9AA6B5; line-height:1.6; }
+  .tpl-card .tc-use {
+    align-self:flex-start; margin-top:2px; border:1px solid #9CC4EC; background:#F2F8FF;
+    color:#005BAC; font-size:12px; border-radius:16px; padding:7px 16px; cursor:pointer;
+  }
+  .tpl-card .tc-use:active { background:#E1EFFE; }
   .field-row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
   .field-row input[type=text] {
     flex:1; height:40px; border:1px solid #DDE4EE; border-radius:10px; padding:0 12px;
@@ -309,10 +328,16 @@
     <div class="pane on" id="pane-forms">
       <div class="pane-head">
         <div class="t">专属税费表单</div>
-        <button class="btn-add" id="btn-new-form">
-          <svg viewBox="0 0 24 24"><path d="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          新建表单
-        </button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-add" id="btn-tpl" style="background:#fff;color:#005BAC;border:1px solid #9CC4EC">
+            <svg viewBox="0 0 24 24" style="fill:#005BAC"><path d="M14,2H6c-1.1,0 -1.99,0.9 -1.99,2L4,20c0,1.1 0.89,2 2,2h12c1.1,0 2,-0.9 2,-2V8l-6,-6zM16,18H8v-2h8v2zM16,14H8v-2h8v2zM13,9V3.5L18.5,9H13z"/></svg>
+            官方模板
+          </button>
+          <button class="btn-add" id="btn-new-form">
+            <svg viewBox="0 0 24 24"><path d="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            新建表单
+          </button>
+        </div>
       </div>
       <div id="forms-list"></div>
     </div>
@@ -389,6 +414,20 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- ============ 官方模板库 底部弹层 ============ -->
+  <div class="sheet-mask" id="sheet-tpl">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="t">官方表单模板库</div>
+        <div class="x" data-close="sheet-tpl">×</div>
+      </div>
+      <div class="sheet-body">
+        <div class="tpl-note">字段结构依据国家税务总局公开发布的纸质表单整理，套用后生成草稿，可按需调整后发布。</div>
+        <div id="tpl-list"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ 打印单据区 ============ -->
@@ -442,6 +481,91 @@ function renderTaxSelect(sel, selected){
     }).join('') + '</optgroup>';
   }).join('');
 }
+
+/* ================= 官方表单模板库（字段依据国家税务总局公开发布表单） ================= */
+var OFFICIAL_TEMPLATES = [
+  {
+    key:'gs-a', name:'个人所得税基础信息表（A表）', taxType:'个人所得税', ver:'官方版',
+    target:'适用于扣缴义务人办理全员全额扣缴申报时，填报其支付所得的纳税人的基础信息',
+    source:'国家税务总局公开发布 · etax.chinatax.gov.cn 下载服务（grsdsjcxxa）',
+    remark:'带 * 栏次为必填项；纸质表单共29栏，本模板按官方栏目逐项设置。',
+    fields:[
+      {label:'纳税人识别号',type:'text'},{label:'*纳税人姓名',type:'text'},
+      {label:'*身份证件类型',type:'text'},{label:'*身份证件号码',type:'text'},
+      {label:'*出生日期',type:'date'},{label:'*国籍/地区',type:'text'},
+      {label:'任职受雇从业类型',type:'text'},{label:'职务',type:'text'},{label:'学历',type:'text'},
+      {label:'任职受雇从业日期',type:'date'},{label:'离职日期',type:'date'},
+      {label:'手机号码',type:'text'},{label:'户籍所在地',type:'text'},{label:'经常居住地',type:'text'},
+      {label:'联系地址',type:'text'},{label:'电子邮箱',type:'text'},
+      {label:'开户银行',type:'text'},{label:'银行账号',type:'text'},
+      {label:'投资额（元）',type:'money-none'},{label:'投资比例',type:'text'},
+      {label:'是否残疾/孤老/烈属',type:'text'},{label:'残疾/烈属证号',type:'text'},
+      {label:'*出生地',type:'text'},{label:'*性别',type:'text'},{label:'*首次入境时间',type:'date'}
+    ]
+  },
+  {
+    key:'gs-b', name:'个人所得税基础信息表（B表）', taxType:'个人所得税', ver:'官方版',
+    target:'适用于自然人自行向税务机关办理涉税事项时填报其个人基础信息',
+    source:'国家税务总局公开发布 · etax.chinatax.gov.cn 下载服务（grsdsjcxxb）',
+    remark:'基本信息带 * 栏次必填；任职受雇、投资信息、境外个人信息按实际情形填写。',
+    fields:[
+      {label:'中文名',type:'text'},{label:'英文名',type:'text'},
+      {label:'*证件类型一',type:'text'},{label:'*证件号码一',type:'text'},
+      {label:'证件类型二',type:'text'},{label:'证件号码二',type:'text'},
+      {label:'*国籍/地区',type:'text'},{label:'*出生日期',type:'date'},
+      {label:'户籍所在地',type:'text'},{label:'经常居住地',type:'text'},{label:'联系地址',type:'text'},
+      {label:'*手机号码',type:'text'},{label:'电子邮箱',type:'text'},
+      {label:'开户银行',type:'text'},{label:'银行账号',type:'text'},{label:'学历',type:'text'},
+      {label:'特殊情形（残疾/烈属/孤老）',type:'text'},{label:'残疾/烈属证号',type:'text'},
+      {label:'任职受雇单位名称',type:'text'},{label:'任职单位纳税人识别号',type:'text'},
+      {label:'任职受雇从业日期',type:'date'},{label:'离职日期',type:'date'},
+      {label:'任职类型（雇员/保险营销员/证券经纪人/其他）',type:'text'},{label:'职务（高层/其他）',type:'text'},
+      {label:'被投资单位名称',type:'text'},{label:'被投资单位纳税人识别号',type:'text'},
+      {label:'投资额（元）',type:'money-none'},{label:'投资比例',type:'text'},
+      {label:'*出生地',type:'text'},{label:'*性别',type:'text'},
+      {label:'*首次入境时间',type:'date'},{label:'预计离境时间',type:'date'},
+      {label:'*涉税事由',type:'text'}
+    ]
+  },
+  {
+    key:'gs-add', name:'个人所得税专项附加扣除信息表', taxType:'个人所得税', ver:'七项扣除版',
+    target:'适用于自然人享受子女教育、婴幼儿照护、继续教育、大病医疗、住房贷款利息、住房租金、赡养老人专项附加扣除时填报',
+    source:'依据《个人所得税专项附加扣除暂行办法》及国务院关于提高三项专项附加扣除标准的通知（2023年）',
+    remark:'七项专项附加扣除按实际享受情形填报；扣除标准以最新政策为准（子女教育/婴幼儿照护每孩每月2000元，赡养老人每月3000元）。',
+    fields:[
+      {label:'子女/婴幼儿姓名',type:'text'},{label:'子女/婴幼儿证件号码',type:'text'},
+      {label:'子女出生日期',type:'date'},{label:'受教育阶段/就读学校',type:'text'},
+      {label:'教育起止时间',type:'text'},{label:'本人扣除比例（100%/50%）',type:'text'},
+      {label:'继续教育类型（学历学位/职业资格）',type:'text'},
+      {label:'继续教育证书名称及编号',type:'text'},{label:'发证机关及发证日期',type:'text'},
+      {label:'大病医疗患者姓名及证件号',type:'text'},{label:'与纳税人关系',type:'text'},
+      {label:'医药费用总金额（元）',type:'money-none'},
+      {label:'个人负担（医保目录范围内超1.5万元部分）（元）',type:'money-none'},
+      {label:'住房坐落地址',type:'text'},{label:'产权证号/贷款合同编号',type:'text'},
+      {label:'贷款银行及贷款期限',type:'text'},{label:'首次还款日期',type:'date'},
+      {label:'主要工作城市',type:'text'},{label:'住房出租方类型及名称证件号',type:'text'},
+      {label:'住房租赁起止时间',type:'text'},
+      {label:'被赡养人姓名及证件号',type:'text'},{label:'与纳税人关系',type:'text'},
+      {label:'共同赡养人信息',type:'text'},
+      {label:'分摊方式（独生/约定/指定）及月扣除金额',type:'text'}
+    ]
+  },
+  {
+    key:'gs-vat', name:'增值税及附加税费申报表（一般纳税人·主表关键栏次）', taxType:'增值税', ver:'申报简化版',
+    target:'适用于增值税一般纳税人按月/按季申报，按主表关键栏次填报计税',
+    source:'依据《增值税及附加税费申报表（一般纳税人适用）》（国家税务总局公告2021年第20号）及《增值税法》（2026年1月1日施行）',
+    remark:'本模板为演示用关键栏次简化版，正式申报以电子税务局完整申报表为准。应纳税额＝销项税额＋进项税额转出－进项税额－上期留抵税额－应纳税额减征额。',
+    fields:[
+      {label:'按适用税率计税销售额（元）',type:'money-none'},
+      {label:'销项税额（元）',type:'money-add'},
+      {label:'进项税额（元）',type:'money-sub'},
+      {label:'上期留抵税额（元）',type:'money-sub'},
+      {label:'进项税额转出额（元）',type:'money-add'},
+      {label:'应纳税额减征额（元）',type:'money-sub'},
+      {label:'简易计税办法计算的应纳税额（元）',type:'money-add'}
+    ]
+  }
+];
 
 function load(k, d){ try{ var v = JSON.parse(localStorage.getItem(k)); return v || d; }catch(e){ return d; } }
 function save(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
@@ -655,6 +779,31 @@ document.querySelectorAll('[data-close]').forEach(function(x){
 });
 document.getElementById('sheet-form').addEventListener('click', function(e){
   if (e.target === this) this.classList.remove('on');
+});
+
+/* ---------- 官方模板库 ---------- */
+document.getElementById('btn-tpl').addEventListener('click', function(){
+  var box = document.getElementById('tpl-list');
+  box.innerHTML = OFFICIAL_TEMPLATES.map(function(t){
+    return '<div class="tpl-card">' +
+      '<div class="tc-top"><div class="tc-name">'+esc(t.name)+'</div>' +
+        '<span class="tag tax">'+esc(t.taxType)+'</span><span class="tag draft">'+esc(t.ver)+'</span></div>' +
+      '<div class="tc-desc">'+esc(t.target)+'<br>填报项目 '+t.fields.length+' 项</div>' +
+      '<div class="tc-src">来源：'+esc(t.source)+'</div>' +
+      '<button class="tc-use" data-tpl="'+t.key+'">使用此模板</button>' +
+    '</div>';
+  }).join('');
+  document.getElementById('sheet-tpl').classList.add('on');
+});
+document.getElementById('sheet-tpl').addEventListener('click', function(e){
+  if (e.target === this) this.classList.remove('on');
+});
+document.getElementById('tpl-list').addEventListener('click', function(e){
+  var btn = e.target.closest('.tc-use'); if(!btn) return;
+  var tpl = OFFICIAL_TEMPLATES.filter(function(t){return t.key===btn.getAttribute('data-tpl');})[0];
+  document.getElementById('sheet-tpl').classList.remove('on');
+  openFormSheet(tpl); // 复用编辑弹层：无 id → 保存为新草稿
+  toast('已载入官方模板，保存后即创建草稿');
 });
 function renderFieldEditor(fields){
   document.getElementById('f-fields').innerHTML = fields.map(function(fd, i){
