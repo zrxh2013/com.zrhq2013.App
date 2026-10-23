@@ -151,6 +151,8 @@
     background:#fff; color:#005BAC; font-size:15px; cursor:pointer;
   }
 
+  .tax-hint { font-size:11px; color:#7A8699; margin-top:7px; line-height:1.7; }
+  .tax-hint b { color:#005BAC; font-weight:600; }
   .field-row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
   .field-row input[type=text] {
     flex:1; height:40px; border:1px solid #DDE4EE; border-radius:10px; padding:0 12px;
@@ -365,12 +367,9 @@
       <div class="sheet-body">
         <div class="field"><label>表单名称 *</label><input type="text" id="f-name" placeholder="如：增值税专属税费申报表（一般纳税人）"></div>
         <div class="grid2">
-          <div class="field"><label>适用税种</label>
-            <select class="full" id="f-tax">
-              <option>增值税</option><option>企业所得税</option><option>个人所得税</option>
-              <option>消费税</option><option>印花税</option><option>城市维护建设税</option>
-              <option>附加税费</option><option>其他</option>
-            </select>
+          <div class="field"><label>适用税种（现行 18 个税种）</label>
+            <select class="full" id="f-tax"></select>
+            <div class="tax-hint" id="f-tax-hint"></div>
           </div>
           <div class="field"><label>表单版本</label><input type="text" id="f-ver" placeholder="如 V1.0"></div>
         </div>
@@ -401,6 +400,48 @@ var LS_FORMS = 'tax_admin_forms_v2';
 var LS_RECORDS = 'tax_admin_records_v2';
 var SESSION = 'tax_admin_session';
 var AUDITOR = '税务人工管理中心';
+
+/* 现行 18 个税种（截至 2026 年，14 个已立法）；类别 / 法律依据 / 征收机关 */
+var TAX_TYPES = [
+  { cat:'货物和劳务税', items:[
+    { n:'增值税',      law:'《中华人民共和国增值税法》（2026年1月1日施行）', auth:'税务机关征收，进口环节由海关代征', legislated:true },
+    { n:'消费税',      law:'《中华人民共和国消费税暂行条例》',               auth:'税务机关征收，进口环节由海关代征', legislated:false },
+    { n:'车辆购置税',  law:'《中华人民共和国车辆购置税法》',                 auth:'税务机关征收', legislated:true },
+    { n:'关税',        law:'《中华人民共和国关税法》',                       auth:'海关征收', legislated:true }
+  ]},
+  { cat:'所得税', items:[
+    { n:'企业所得税', law:'《中华人民共和国企业所得税法》', auth:'税务机关征收', legislated:true },
+    { n:'个人所得税', law:'《中华人民共和国个人所得税法》', auth:'税务机关征收', legislated:true }
+  ]},
+  { cat:'资源和环境税', items:[
+    { n:'资源税',       law:'《中华人民共和国资源税法》',     auth:'税务机关征收', legislated:true },
+    { n:'环境保护税',   law:'《中华人民共和国环境保护税法》', auth:'税务机关征收', legislated:true },
+    { n:'城镇土地使用税', law:'《中华人民共和国城镇土地使用税暂行条例》', auth:'税务机关征收', legislated:false },
+    { n:'耕地占用税',   law:'《中华人民共和国耕地占用税法》', auth:'税务机关征收', legislated:true }
+  ]},
+  { cat:'财产和行为税', items:[
+    { n:'房产税',     law:'《中华人民共和国房产税暂行条例》',   auth:'税务机关征收', legislated:false },
+    { n:'车船税',     law:'《中华人民共和国车船税法》',         auth:'税务机关征收（保险机构代收代缴）', legislated:true },
+    { n:'印花税',     law:'《中华人民共和国印花税法》',         auth:'税务机关征收', legislated:true },
+    { n:'契税',       law:'《中华人民共和国契税法》',           auth:'税务机关征收', legislated:true },
+    { n:'土地增值税', law:'《中华人民共和国土地增值税暂行条例》', auth:'税务机关征收', legislated:false }
+  ]},
+  { cat:'特定目的税', items:[
+    { n:'城市维护建设税', law:'《中华人民共和国城市维护建设税法》', auth:'税务机关征收', legislated:true },
+    { n:'烟叶税',       law:'《中华人民共和国烟叶税法》',         auth:'税务机关征收', legislated:true },
+    { n:'船舶吨税',     law:'《中华人民共和国船舶吨税法》',       auth:'海关征收', legislated:true }
+  ]}
+];
+var TAX_MAP = {};
+TAX_TYPES.forEach(function(g){ g.items.forEach(function(t){ TAX_MAP[t.n] = Object.assign({cat:g.cat}, t); }); });
+function taxInfo(name){ return TAX_MAP[name] || {n:name, law:'—', auth:'—', cat:'—', legislated:null}; }
+function renderTaxSelect(sel, selected){
+  sel.innerHTML = TAX_TYPES.map(function(g){
+    return '<optgroup label="'+g.cat+'">' + g.items.map(function(t){
+      return '<option value="'+t.n+'"'+(t.n===selected?' selected':'')+'>'+t.n+'</option>';
+    }).join('') + '</optgroup>';
+  }).join('');
+}
 
 function load(k, d){ try{ var v = JSON.parse(localStorage.getItem(k)); return v || d; }catch(e){ return d; } }
 function save(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
@@ -563,7 +604,7 @@ function renderForms(forms){
         '<span class="tag tax">'+esc(f.taxType)+'</span>' +
         '<span class="tag '+(f.status==='published'?'pub':'draft')+'">'+(f.status==='published'?'已发布':'草稿')+'</span></div>' +
       '<div class="row2">编号 '+f.id+' · '+esc(f.ver||'V1.0')+' · 填报项目 '+f.fields.length+' 项<br>'+
-        esc(f.target||'—')+' · 已生成申报 '+n+' 份</div>' +
+        esc(taxInfo(f.taxType).cat)+' · '+esc(f.target||'—')+' · 已生成申报 '+n+' 份</div>' +
       '<div class="ops">' +
         (f.status==='draft'
           ? '<span class="op solid" data-act="publish" data-id="'+f.id+'">发布</span>'
@@ -600,7 +641,9 @@ function openFormSheet(f){
   editingId = f ? f.id : null;
   document.getElementById('sheet-form-title').textContent = f ? '编辑专属表单' : '新建专属表单';
   document.getElementById('f-name').value = f ? f.name : '';
-  document.getElementById('f-tax').value = f ? f.taxType : '增值税';
+  var taxSel = document.getElementById('f-tax');
+  renderTaxSelect(taxSel, f ? f.taxType : '增值税');
+  updateTaxHint();
   document.getElementById('f-ver').value = f ? (f.ver||'V1.0') : 'V1.0';
   document.getElementById('f-target').value = f ? (f.target||'') : '';
   document.getElementById('f-remark').value = f ? (f.remark||'') : '';
@@ -608,7 +651,10 @@ function openFormSheet(f){
   document.getElementById('sheet-form').classList.add('on');
 }
 document.querySelectorAll('[data-close]').forEach(function(x){
-  x.addEventListener('click', function(){ document.getElementById('sheet-'+x.getAttribute('data-close')).classList.remove('on'); });
+  x.addEventListener('click', function(){ document.getElementById(x.getAttribute('data-close')).classList.remove('on'); });
+});
+document.getElementById('sheet-form').addEventListener('click', function(e){
+  if (e.target === this) this.classList.remove('on');
 });
 function renderFieldEditor(fields){
   document.getElementById('f-fields').innerHTML = fields.map(function(fd, i){
@@ -627,6 +673,13 @@ function renderFieldEditor(fields){
 document.getElementById('btn-add-field').addEventListener('click', function(){
   var rows = collectFieldRows(); rows.push({label:'',type:'money-add'}); renderFieldEditor(rows);
 });
+function updateTaxHint(){
+  var t = taxInfo(document.getElementById('f-tax').value);
+  document.getElementById('f-tax-hint').innerHTML =
+    '<b>'+esc(t.cat)+'</b> · '+(t.legislated===false?'<span style="color:#C77B16">暂行条例（尚未完成立法）</span> · ':'')+
+    esc(t.law)+'<br>征收机关：'+esc(t.auth);
+}
+document.getElementById('f-tax').addEventListener('change', updateTaxHint);
 document.getElementById('f-fields').addEventListener('click', function(e){
   if (e.target.getAttribute('data-role')==='del') {
     var rows = collectFieldRows();
@@ -685,12 +738,13 @@ function openFill(f){
       '<div class="field"><label>纳税人识别号 *</label><input class="full" id="r-no" type="text" placeholder="统一社会信用代码"></div>' +
     '</div><div class="grid2">' +
       '<div class="field"><label>联系电话</label><input class="full" id="r-phone" type="tel" placeholder="选填"></div>' +
-      '<div class="field"><label>税种</label><input class="full" value="'+esc(f.taxType)+'" disabled></div>' +
+      '<div class="field"><label>税种</label><input class="full" value="'+esc(f.taxType)+'（'+esc(taxInfo(f.taxType).cat)+'）" disabled>' +
+        '<div class="tax-hint">征收机关：'+esc(taxInfo(f.taxType).auth)+'</div></div>' +
     '</div><div class="grid2">' +
       '<div class="field"><label>税款所属期起</label><input class="full" id="r-ps" type="date" value="'+pStart+'"></div>' +
       '<div class="field"><label>税款所属期止</label><input class="full" id="r-pe" type="date"></div>' +
     '</div></div>' +
-    '<div class="sec-title">申报明细（按「'+esc(f.name)+'」）</div><div class="card-box" id="r-fields">' +
+    '<div class="sec-title">申报明细 · 「'+esc(f.name)+'」</div><div class="card-box" id="r-fields">' +
       f.fields.map(function(fd){
         var input = fd.type.indexOf('money')===0
           ? '<input class="full r-val" type="number" min="0" step="0.01" data-label="'+esc(fd.label)+'" data-type="'+fd.type+'" placeholder="0.00">'
@@ -796,6 +850,8 @@ function buildDoc(f, d, rec, reviewed){
     '<table>' +
       '<tr><td class="lab">纳税人名称</td><td>'+esc(d.name)+'</td><td class="lab">纳税人识别号</td><td>'+esc(d.taxNo)+'</td></tr>' +
       '<tr><td class="lab">税款所属期</td><td>'+esc(d.periodStart)+' 至 '+esc(d.periodEnd)+'</td><td class="lab">联系电话</td><td>'+esc(d.phone||'—')+'</td></tr>' +
+      '<tr><td class="lab">税种</td><td>'+esc(f.taxType)+'</td><td class="lab">征收机关</td><td>'+esc(taxInfo(f.taxType).auth)+'</td></tr>' +
+      '<tr><td class="lab">法律依据</td><td colspan="3">'+esc(taxInfo(f.taxType).law)+'</td></tr>' +
     '</table>' +
     '<table><tr><th style="width:60%">项目</th><th>金额 / 内容（元）</th></tr>' + rows +
       '<tr><td class="lab">已缴税额</td><td class="right">'+fmtMoney(d.paid)+'</td></tr>' +
@@ -850,6 +906,9 @@ function openDetail(rid){
       '<div class="kv"><div class="k">工单编号</div><div class="v">'+esc(r.id)+'</div></div>' +
       '<div class="kv"><div class="k">当前状态</div><div class="v"><span class="tag '+r.status+'">'+STATUS_TXT[r.status]+'</span></div></div>' +
       '<div class="kv"><div class="k">表单</div><div class="v">'+esc(r.formName)+'</div></div>' +
+      '<div class="kv"><div class="k">税种</div><div class="v">'+esc(r.taxType)+'（'+esc(taxInfo(r.taxType).cat)+'）</div></div>' +
+      '<div class="kv"><div class="k">征收机关</div><div class="v">'+esc(taxInfo(r.taxType).auth)+'</div></div>' +
+      '<div class="kv"><div class="k">法律依据</div><div class="v" style="font-size:12px">'+esc(taxInfo(r.taxType).law)+'</div></div>' +
     '</div>' +
     '<div class="sec-title">纳税人信息</div>' +
     '<div class="card-box">' +
