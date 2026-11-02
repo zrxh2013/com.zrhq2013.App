@@ -46,7 +46,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Cache settings
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setAppCacheEnabled(true);
+        // setAppCacheEnabled 已在 API 34 公开 SDK 中移除，HTTP 缓存默认启用，无需再设置
 
         // User agent
         settings.setUserAgentString(settings.getUserAgentString());

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 24-25 回退图标（自适应图标仅 API 26+ 支持） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M10,0 h28 a10,10 0 0 1 10,10 v28 a10,10 0 0 1 -10,10 h-28 a10,10 0 0 1 -10,-10 v-28 a10,10 0 0 1 10,-10 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M28,8 L16,26 h7 l-3,14 12,-18 h-7 z" />
+</vector>

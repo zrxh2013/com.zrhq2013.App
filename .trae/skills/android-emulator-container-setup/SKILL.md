@@ -187,6 +187,36 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.zrhq2013.app/.MainActivity
 ```
 
+## 第 7 步（本项目）：Gradle 构建与联网排错（2026-11 实测）
+
+容器重置后项目侧还会遇到以下问题，按序处理：
+
+1. **长任务必须 `setsid` 脱离会话**：sdkmanager/gradle/emulator 直接 `&` 会在工具调用
+   超时回收终端时被一起杀掉（sdkmanager 留下 `.temp/PackageOperation*` 残包）。
+   模板：`setsid bash /tmp/run.sh > /tmp/x.log 2>&1 < /dev/null &`，重跑 sdkmanager 可续装。
+2. **JDK 路径会变**：mise 自动升级小版本（17.0.2→17.0.20+101），先
+   `ls /root/.local/share/mise/installs/java/` 用真实路径；sdkmanager 与构建都用 JDK17。
+3. **Gradle 不认 shell 代理**：写 `/root/.gradle/gradle.properties`：
+   `systemProp.https.proxyHost=127.0.0.1` / `proxyPort=18080`（http 同样）。
+4. **Maven Central 经共享代理 429 限流**：`/root/.gradle/init.gradle` 的 `settingsEvaluated`
+   里对 pluginManagement 与 dependencyResolutionManagement 都 `repositories { clear() }`
+   后前置 `maven.aliyun.com/repository/google` 与 `/public`（只 append 不 clear 无效，
+   原 mavenCentral 仍在前并先返回 429）。
+5. **项目 gradle.properties 含 `-XX:MaxPermSize=512m`**：JDK17 下 daemon 起不来
+   （Unrecognized VM option），删除该参数只留 `-Xmx2048m`。
+6. **缺 mipmap/ic_launcher**（README 要求自备图标，仓库未包含）：补
+   `mipmap-anydpi-v26/ic_launcher.xml`（adaptive-icon）+ `mipmap/ic_launcher.xml`（矢量回退）
+   + foreground vector + 背景色，否则 processDebugResources 失败。
+7. **`WebSettings.setAppCacheEnabled(true)` 在 compileSdk 34 公开 API 已移除**：
+   compileDebugJavaWithJavac cannot find symbol，删掉该行即可。
+8. 构建顺序：**先编译（模拟器关着），再启动模拟器**——二者并行会顶破 4GB cgroup。
+   wrapper 用系统 gradle 生成：`gradle wrapper --gradle-version 8.1.1`。
+9. **guest 上网要借宿主代理**（沙箱直连不通）：代理只监听 127.0.0.1，从 guest 用 slirp
+   回环别名 `adb shell settings put global http_proxy 10.0.2.2:18080`，force-stop 后
+   重开 App 即生效（不必重启模拟器；清除用 `settings put global http_proxy :0`）。
+10. TCG 下 H5 首屏渲染要再等 2–4 分钟：截图 10KB 白屏属正常，PNG 涨到 30KB+ 即内容出来了；
+    以 logcat `chromium: [INFO:CONSOLE]` 有无业务 JS 日志判断网络是否真的通。
+
 ## 故障速查
 
 | 现象 | 原因 | 处理 |

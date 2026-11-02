@@ -1,0 +1,34 @@
+[
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/mipmap_ic_launcher.xml.flat",
+        "source": "com.zrhq2013.app-main-33:/mipmap/ic_launcher.xml"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-merged_res-31:/drawable_splash_background.xml.flat",
+        "source": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-main-33:/drawable/splash_background.xml"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-main-33:/layout/activity_main.xml"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-merged_res-31:/xml_network_security_config.xml.flat",
+        "source": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-main-33:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-merged_res-31:/drawable_progress_drawable.xml.flat",
+        "source": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-main-33:/drawable/progress_drawable.xml"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.zrhq2013.app-main-33:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-merged_res-31:/layout_progress_bar.xml.flat",
+        "source": "/root/.gradle/daemon/8.1.1/com.zrhq2013.app-main-33:/layout/progress_bar.xml"
+    },
+    {
+        "merged": "com.zrhq2013.app-merged_res-31:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.zrhq2013.app-main-33:/drawable/ic_launcher_foreground.xml"
+    }
+]
