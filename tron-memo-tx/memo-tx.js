@@ -68,7 +68,8 @@ function parseArgs(argv) {
 }
 
 function tron(net, privateKey) {
-  const cfg = { fullHost: NETWORKS[net].host, headers: { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY || '' } };
+  const cfg = { fullHost: NETWORKS[net].host };
+  if (process.env.TRONGRID_API_KEY) cfg.headers = { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY };
   if (privateKey) cfg.privateKey = privateKey;
   return new TronWeb(cfg);
 }
