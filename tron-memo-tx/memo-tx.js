@@ -36,6 +36,14 @@
  *   FROM_PRIVATE_KEY=0xyourkey node memo-tx.js run --net nile
  *
  * 网络: --net nile(默认, 测试网) | main(主网；广播/run 需额外设置 TRON_MAINNET_CONFIRM=YES)
+ *
+ * 自定义节点 RPC（可选，优先级: --rpc > 环境变量 TRON_RPC_URL > 默认公共节点）:
+ *   node memo-tx.js balance --rpc http://127.0.0.1:8090 --address Txxxx      # 自建 java-tron 全节点
+ *   TRON_RPC_URL=https://your-tron-gateway node memo-tx.js build --net main ...
+ *   node memo-tx.js query --rpc https://your-trongrid-compatible-gateway ...  # query 需 TronGrid 兼容网关
+ *   node memo-tx.js wait --id xxx --explorer https://your-explorer/tx/        # 可选：覆盖浏览器链接前缀
+ *   说明: 自建原生节点提供 /wallet/* 接口(balance/build/broadcast/wait 可用)，
+ *         但没有 /v1 地址流水接口，query 必须指向 TronGrid 兼容网关。
  */
 'use strict';
 
@@ -48,6 +56,24 @@ const NETWORKS = {
   nile: { host: 'https://nile.trongrid.io',  explorer: 'https://nile.tronscan.org/#/transaction/' },
   main: { host: 'https://api.trongrid.io',  explorer: 'https://tronscan.org/#/transaction/' },
 };
+// 自定义节点覆盖（--rpc 或环境变量 TRON_RPC_URL，优先级: 参数 > 环境变量 > 默认）
+let RPC_OVERRIDE = { host: null, explorer: null };
+
+function normalizeHost(u) {
+  const s = String(u).trim().replace(/\/+$/, ''); // 去掉尾部斜杠，避免 //wallet 双斜杠
+  new URL(s);                                       // 非法 URL 直接报错
+  if (!/^https?:$/.test(new URL(s).protocol)) throw new Error(`RPC 地址必须是 http(s) 协议: ${u}`);
+  return s;
+}
+// 取当前生效的节点配置（host + 浏览器前缀）
+function NC(net) {
+  const base = NETWORKS[net] || NETWORKS.nile;
+  return {
+    host: RPC_OVERRIDE.host || base.host,
+    explorer: RPC_OVERRIDE.explorer || base.explorer,
+    custom: !!RPC_OVERRIDE.host,
+  };
+}
 const BURN_ADDRESS = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb'; // 黑洞地址，1 drop(1 sun) 存证常用
 const MEMO_MAX_BYTES = 900;                                   // 单条 memo 安全上限
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -68,7 +94,7 @@ function parseArgs(argv) {
 }
 
 function tron(net, privateKey) {
-  const cfg = { fullHost: NETWORKS[net].host };
+  const cfg = { fullHost: NC(net).host };
   if (process.env.TRONGRID_API_KEY) cfg.headers = { 'TRON-PRO-API-KEY': process.env.TRONGRID_API_KEY };
   if (privateKey) cfg.privateKey = privateKey;
   return new TronWeb(cfg);
@@ -223,7 +249,7 @@ async function cmdBroadcast(net, a) {
     throw new Error('广播被节点拒绝: ' + JSON.stringify({ code: result && result.code, message: msg }));
   }
 
-  console.log('广播成功  :', NETWORKS[net].explorer + signedTx.txID);
+  console.log('广播成功  :', NC(net).explorer + signedTx.txID);
   if (!a['no-wait']) {
     await cmdWait(net, { id: signedTx.txID, timeout: a.timeout || 60000 });
   }
@@ -243,7 +269,7 @@ async function cmdWait(net, a) {
       console.log('已上链    : 区块 #' + info.blockNumber);
       console.log('手续费    :', (Number(info.fee || 0) / 1e6), 'TRX');
       console.log('合约结果  :', (info.receipt && info.receipt.result) || '(普通转账无 receipt)');
-      console.log('浏览器    :', NETWORKS[net].explorer + a.id);
+      console.log('浏览器    :', NC(net).explorer + a.id);
       return info;
     }
     process.stdout.write('.');
@@ -314,17 +340,21 @@ async function cmdQuery(net, a) {
     if (fingerprint) q.set('fingerprint', fingerprint);
     if (startMs !== null) q.set('min_timestamp', String(startMs));
     if (endMs !== null) q.set('max_timestamp', String(endMs));
-    const url = `${NETWORKS[net].host}/v1/accounts/${encodeURIComponent(base58)}/transactions?${q}`;
+    const url = `${NC(net).host}/v1/accounts/${encodeURIComponent(base58)}/transactions?${q}`;
 
     // 公共节点无 API key 时限流(429)/偶发 5xx：指数退避重试
     let resp = null, j = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       resp = await fetch(url, { headers });
       if (resp.ok || (resp.status !== 429 && resp.status < 500)) break;
-      if (attempt === 3) throw new Error(`TronGrid HTTP ${resp.status}：请求过于频繁，请稍后再试或设置 TRONGRID_API_KEY`);
+      if (attempt === 3) throw new Error(`节点 HTTP ${resp.status}：请求过于频繁，请稍后再试或设置 TRONGRID_API_KEY`);
       await sleep(1500 * attempt);
     }
-    if (!resp.ok) throw new Error(`TronGrid HTTP ${resp.status} ${resp.statusText}`);
+    if (resp.status === 404 && NC(net).custom) {
+      throw new Error('自定义节点不支持 /v1 流水接口（404）。query 需要 TronGrid 兼容网关（如 trongrid、tronnode 网关）；' +
+        '自建的原生 java-tron 节点只提供 /wallet/* 接口（可用于 balance/build/broadcast/wait），不支持按地址拉历史流水。');
+    }
+    if (!resp.ok) throw new Error(`节点 HTTP ${resp.status} ${resp.statusText}`);
     j = await resp.json();
     if (!j || j.success === false) throw new Error('TronGrid 返回错误: ' + JSON.stringify(j.error || j));
     const data = Array.isArray(j.data) ? j.data : [];
@@ -359,7 +389,7 @@ async function cmdQuery(net, a) {
         dir, counterparty: dir === 'out' ? to : owner,
         amountSun: amount, amountTrx: amount / 1e6,
         memo, success, txID: tx.txID,
-        explorer: NETWORKS[net].explorer + tx.txID,
+        explorer: NC(net).explorer + tx.txID,
       });
       if (rows.length >= want) break;
     }
@@ -418,7 +448,7 @@ async function cmdRun(net, a) {
   if (!result || result.result !== true) {
     throw new Error('广播被节点拒绝: ' + JSON.stringify(result));
   }
-  console.log('广播成功  :', NETWORKS[net].explorer + signedTx.txID);
+  console.log('广播成功  :', NC(net).explorer + signedTx.txID);
   await cmdWait(net, { id: signedTx.txID, timeout: a.timeout || 60000 });
 }
 
@@ -427,7 +457,17 @@ async function cmdRun(net, a) {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
   const net = NETWORKS[args.net] ? args.net : 'nile';
+  // 自定义节点：--rpc <url> 或 TRON_RPC_URL；可选 --explorer <交易页前缀>
+  const rpcUrl = (args.rpc && args.rpc !== true) ? args.rpc : process.env.TRON_RPC_URL;
+  if (rpcUrl) RPC_OVERRIDE.host = normalizeHost(rpcUrl);
+  if (args.explorer && args.explorer !== true) {
+    RPC_OVERRIDE.explorer = String(args.explorer).trim().replace(/\/+$/, '') + '/';
+  }
   try {
+    if (RPC_OVERRIDE.host) {
+      console.log('节点      : 自定义 RPC ->', RPC_OVERRIDE.host, '(' + net + ')' +
+        (net === 'nile' ? '  注意：主网二次确认按 --net 判定，若该节点实际为主网请用 --net main' : ''));
+    }
     switch (cmd) {
       case 'balance':   await cmdBalance(net, args); break;
       case 'build':     await cmdBuild(net, args); break;
