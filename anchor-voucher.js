@@ -182,7 +182,13 @@ function extractFacts(d) {
 
   console.log('');
   console.log(`${C.c}广播中... 发送方 ${from} → ${to}，金额 ${args.amount} TRX${C.n}`);
-  const tx = await tronWeb.transactionBuilder.sendTrx(to, amountSun, from, { data: memoHex });
+  const tx = await tronWeb.transactionBuilder.sendTrx(to, amountSun, from);
+  // TronWeb 5 的 sendTrx 不支持 data 选项：手动写入 memo 后用 protobuf 工具重算 raw_data_hex / txID
+  tx.raw_data = tx.raw_data || {};
+  tx.raw_data.data = memoHex;
+  const pb = tronWeb.utils.transaction.txJsonToPb(tx);
+  tx.raw_data_hex = tronWeb.utils.transaction.txPbToRawDataHex(pb).toLowerCase();
+  tx.txID = tronWeb.utils.transaction.txPbToTxID(pb).replace(/^0x/, '');
   const signed = await tronWeb.trx.sign(tx);
   const res = await tronWeb.trx.sendRawTransaction(signed);
   if (!res.result && !res.txid) {
@@ -191,5 +197,9 @@ function extractFacts(d) {
   }
   console.log(`${C.g}✅ 已广播${C.n}`);
   log('txID', res.txid);
-  log('浏览器', `https://tronscan.org/#/transaction/${res.txid}`);
-})();
+  const explorer = args.network === 'nile' ? 'https://nile.tronscan.org' : 'https://tronscan.org';
+  log('浏览器', `${explorer}/#/transaction/${res.txid}`);
+})().catch((e) => {
+  console.error(`\n${C.r}执行失败：${e && e.message}${C.n}`);
+  process.exit(1);
+});
