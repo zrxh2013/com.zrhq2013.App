@@ -1,0 +1,26 @@
+# Gradle / 构建产物
+.gradle/
+build/
+
+# 本地 SDK 配置（含本机路径，不应提交）
+local.properties
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+.navigation/
+
+# 原生构建
+.cxx/
+.externalNativeBuild/
+
+# 日志与临时文件
+*.log
+captures/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Google 代码规范插件
+.code-idea/
