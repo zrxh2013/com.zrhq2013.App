@@ -4,4 +4,6 @@
     <string name="loading">加载中...</string>
     <string name="error_loading">页面加载失败</string>
     <string name="retry">重试</string>
+    <string name="download_started">已开始下载，可在通知栏查看进度</string>
+    <string name="download_failed">下载失败，链接无效或下载服务不可用</string>
 </resources>
