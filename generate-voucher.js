@@ -127,9 +127,9 @@ function generatePDF(t, outPath) {
 
   // 顶部色带
   doc.rect(0, 0, W, 92).fill(C.headBg);
-  doc.fillColor('#ffffff').font('Bold').fontSize(22).text('TRON 链上交易存证', M, 28);
+  doc.fillColor('#ffffff').font('Bold').fontSize(22).text('TRON 转账凭证', M, 28);
   doc.font('Noto').fontSize(10).fillColor('#d1fae5')
-     .text('TRON On-Chain Transaction Attestation', M, 58);
+     .text('TRON Transfer Voucher', M, 58);
 
   let y = 118;
 
