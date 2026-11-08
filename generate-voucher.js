@@ -185,15 +185,6 @@ function generatePDF(t, outPath) {
      .text(`${TRONSCAN_URL}/${t.hash}`, M, y, { width: CW, link: `${TRONSCAN_URL}/${t.hash}`, underline: true });
   y += 28;
 
-  // 免责声明
-  doc.moveTo(M, y).lineTo(M + CW, y).lineWidth(0.5).strokeColor(C.line).stroke();
-  y += 10;
-  doc.fillColor(C.gray).font('Noto').fontSize(8).text(
-    '免责声明：本凭证由程序依据 TronScan 公开接口返回的链上数据自动生成，仅用于交易记录留档与核验，不构成付款证明、' +
-    '资产权属证明或任何形式的担保。链上数据最终以区块链浏览器显示为准。',
-    M, y, { width: CW }
-  );
-
   doc.end();
 }
 
