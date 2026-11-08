@@ -133,28 +133,6 @@ function generatePDF(t, outPath) {
 
   let y = 118;
 
-  // 风险提示
-  if (t.risky) {
-    const tip = `风险提示：TronScan 将${t.riskTransaction ? '本交易' : ''}${t.riskTransaction && t.riskContract ? '及' : ''}${t.riskContract ? '该代币合约' : ''}标记为风险。` +
-      `本凭证仅如实记录链上数据，不构成任何付款、兑付或价值证明。`;
-    const th = doc.font('Noto').fontSize(9.5).heightOfString(tip, { width: CW - 24 });
-    doc.roundedRect(M, y, CW, th + 24, 6).fill(C.warnBg);
-    doc.rect(M, y, 4, th + 24).fill(C.warn);
-    doc.fillColor(C.warn).font('Bold').fontSize(10).text('⚠ 风险交易', M + 14, y + 8);
-    doc.font('Noto').fontSize(9.5).fillColor('#7f1d1d').text(tip, M + 14, y + 22, { width: CW - 28 });
-    y += th + 34;
-  }
-
-  // 代币性质说明
-  if (isCustomToken) {
-    const note = `本交易涉及的代币为 “${t.details.tokenName}”（符号 ${t.details.symbol}），合约地址 ${t.details.contract}。` +
-      `该代币为链上自定义发行的 TRC20 代币，并非 USDT，也不等同于美元（USD）法定货币，不具备美元偿付能力。`;
-    const nh = doc.font('Noto').fontSize(9).heightOfString(note, { width: CW - 24 });
-    doc.roundedRect(M, y, CW, nh + 18, 6).fill('#fffbeb');
-    doc.fillColor('#92400e').font('Noto').fontSize(9).text(note, M + 12, y + 9, { width: CW - 24 });
-    y += nh + 28;
-  }
-
   // 分组表格
   const rows = [
     ['交易哈希', t.hash],
@@ -206,6 +184,17 @@ function generatePDF(t, outPath) {
   doc.fillColor('#1d4ed8').font('Noto').fontSize(9)
      .text(`${TRONSCAN_URL}/${t.hash}`, M, y, { width: CW, link: `${TRONSCAN_URL}/${t.hash}`, underline: true });
   y += 28;
+
+  // 代币性质简注（合并为一行）
+  if (isCustomToken || t.risky) {
+    const parts = [];
+    if (isCustomToken) parts.push(`本交易代币 ${t.details.tokenName}（${t.details.symbol}）为自定义 TRC20 代币，非 USDT / 美元法币`);
+    if (t.risky) parts.push('TronScan 标记该交易或合约为风险');
+    const line = `注：${parts.join('；')}。`;
+    const h = doc.font('Noto').fontSize(8).heightOfString(line, { width: CW });
+    doc.fillColor(C.warn).font('Noto').fontSize(8).text(line, M, y, { width: CW });
+    y += h + 6;
+  }
 
   // 免责声明
   doc.moveTo(M, y).lineTo(M + CW, y).lineWidth(0.5).strokeColor(C.line).stroke();
