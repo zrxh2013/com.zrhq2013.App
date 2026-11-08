@@ -154,7 +154,7 @@ function generatePDF(t, outPath) {
     ['带宽费用', `${t.band} TRX`],
     ['能量费用', `${t.energy} TRX`],
     ['总费用', `${t.feeTrx} TRX`],
-    ['交易备注', t.memo ? t.memo : '无'],
+    ['备注', t.memo ? t.memo : '无'],
   ];
 
   const drawSection = (title, list) => {
