@@ -175,16 +175,6 @@ function generatePDF(t, outPath) {
   drawSection('转账详情', transferRows);
   drawSection('网络费用与备注', feeRows);
 
-  // 链上核验
-  doc.fillColor(C.brand).font('Bold').fontSize(11).text('链上核验', M, y);
-  y += 18;
-  doc.fillColor(C.ink).font('Noto').fontSize(9)
-     .text('请在 TronScan 输入交易哈希进行核验，链上数据与本凭证逐项一致：', M, y, { width: CW });
-  y += 16;
-  doc.fillColor('#1d4ed8').font('Noto').fontSize(9)
-     .text(`${TRONSCAN_URL}/${t.hash}`, M, y, { width: CW, link: `${TRONSCAN_URL}/${t.hash}`, underline: true });
-  y += 28;
-
   doc.end();
 }
 
