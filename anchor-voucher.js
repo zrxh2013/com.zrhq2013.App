@@ -15,6 +15,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const TRONSCAN_API = 'https://apilist.tronscanapi.com/api/transaction-info';
+const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // 主网官方 USDT（TRC20）
 const HOSTS = {
   mainnet: 'https://api.trongrid.io',
   nile: 'https://nile.trongrid.io',
@@ -85,6 +86,7 @@ function extractFacts(d) {
     from: t.from_address || d.ownerAddress || '',
     to: t.to_address || '',
     ret: d.contractRet || '',
+    risk: d.riskTransaction === true,
   };
 }
 
@@ -109,7 +111,8 @@ function extractFacts(d) {
   const raw = await fetchTx(args.src, args.txJson);
   const f = extractFacts(raw);
 
-  // 3. memo（只记录可核验的链上事实 + 文件指纹）
+  // 3. memo（只记录可核验的链上事实 + 文件指纹，并保留代币标识）
+  const isUsdt = !!f.token && f.token === USDT_CONTRACT;
   const memoObj = {
     ty: 'ANCHOR',
     v: 1,
@@ -119,6 +122,9 @@ function extractFacts(d) {
     name: f.name,
     symbol: f.symbol,
     amt: f.amt,
+    is_usdt: isUsdt,
+    risk: f.risk,
+    note: f.token && !isUsdt ? 'custom TRC20 token; not USDT/fiat' : '',
     pdf_sha256: pdfSha,
     ts: Date.now(),
   };
@@ -135,6 +141,8 @@ function extractFacts(d) {
   log('区块高度', String(f.block));
   log('代币合约', f.token);
   log('代币名称', `${f.name}（${f.symbol}）`);
+  log('代币类型', !f.token ? '(非 TRC20)' : isUsdt ? '官方 USDT' : `自定义 TRC20（非 USDT）`);
+  log('风险标记', f.risk ? '是（TronScan）' : '否');
   log('转账数量', `${f.amt} ${f.symbol}`);
   log('转出地址', f.from);
   log('转入地址', f.to);
