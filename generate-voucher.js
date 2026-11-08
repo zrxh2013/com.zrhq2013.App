@@ -185,17 +185,6 @@ function generatePDF(t, outPath) {
      .text(`${TRONSCAN_URL}/${t.hash}`, M, y, { width: CW, link: `${TRONSCAN_URL}/${t.hash}`, underline: true });
   y += 28;
 
-  // 代币性质简注（合并为一行）
-  if (isCustomToken || t.risky) {
-    const parts = [];
-    if (isCustomToken) parts.push(`本交易代币 ${t.details.tokenName}（${t.details.symbol}）为自定义 TRC20 代币，非 USDT / 美元法币`);
-    if (t.risky) parts.push('TronScan 标记该交易或合约为风险');
-    const line = `注：${parts.join('；')}。`;
-    const h = doc.font('Noto').fontSize(8).heightOfString(line, { width: CW });
-    doc.fillColor(C.warn).font('Noto').fontSize(8).text(line, M, y, { width: CW });
-    y += h + 6;
-  }
-
   // 免责声明
   doc.moveTo(M, y).lineTo(M + CW, y).lineWidth(0.5).strokeColor(C.line).stroke();
   y += 10;
