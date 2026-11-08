@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "pdfkit": "^0.20.2"
+    "@noble/secp256k1": "^1.7.1",
+    "pdfkit": "^0.20.2",
+    "tronweb": "^5.3.2"
   }
 }
