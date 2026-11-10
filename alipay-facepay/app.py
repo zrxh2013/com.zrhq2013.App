@@ -13,9 +13,10 @@ import base64
 import io
 import logging
 import os
+import re
 import secrets
-import time
 from datetime import datetime
+from decimal import Decimal
 
 from dotenv import load_dotenv
 
@@ -165,6 +166,8 @@ def query_order(out_trade_no: str):
         "status": order["status"],
         "trade_no": order["trade_no"],
         "paid_at": order["paid_at"],
+        "refunded_amount": order.get("refunded_amount", "0.00"),
+        "refunds": store.list_refunds(out_trade_no),
     })
 
 
@@ -209,6 +212,133 @@ def notify():
         log.info("忽略中间状态通知: %s", trade_status)
 
     return "success"
+
+
+# ---------------------------------------------------------------- 关单
+
+@app.post("/api/orders/<out_trade_no>/close")
+def close_order(out_trade_no: str):
+    order = store.get_order(out_trade_no)
+    if order is None:
+        return jsonify({"error": "订单不存在"}), 404
+    if order["status"] not in ("CREATED", "WAIT_BUYER_PAY"):
+        return jsonify({"error": f"当前状态 {order['status']} 不允许关单"}), 409
+
+    try:
+        client.close_order(out_trade_no)
+    except Exception as exc:
+        log.exception("关单失败")
+        return jsonify({"error": f"关单失败: {exc}"}), 502
+
+    store.apply_trade_status(out_trade_no, "TRADE_CLOSED", None, {"action": "manual_close"})
+    log.info("订单已关闭: %s", out_trade_no)
+    return jsonify(store.get_order(out_trade_no))
+
+
+# ---------------------------------------------------------------- 退款
+
+def gen_out_request_no() -> str:
+    return "RF" + datetime.now().strftime("%Y%m%d%H%M%S") + secrets.token_hex(3)
+
+
+@app.post("/api/orders/<out_trade_no>/refund")
+def refund_order(out_trade_no: str):
+    order = store.get_order(out_trade_no)
+    if order is None:
+        return jsonify({"error": "订单不存在"}), 404
+    if order["status"] not in ("TRADE_SUCCESS", "TRADE_FINISHED"):
+        return jsonify({"error": "仅支付成功的订单可以退款"}), 409
+
+    payload = request.get_json(silent=True) or {}
+    refund_amount = str(payload.get("refund_amount") or "").strip()
+    reason = (payload.get("reason") or "").strip() or None
+    try:
+        validate_amount(refund_amount)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    # 可退余额校验：订单总额 - 已累计退款
+    remaining = Decimal(order["total_amount"]) - Decimal(order.get("refunded_amount", "0.00"))
+    if Decimal(refund_amount) > remaining:
+        return jsonify({
+            "error": f"退款金额超过可退余额，剩余可退 {format(remaining, '.2f')} 元"
+        }), 409
+
+    out_request_no = gen_out_request_no()
+    # 先落本地退款单（PROCESSING），out_request_no 作为全局幂等键
+    store.create_refund(out_request_no, out_trade_no, refund_amount, reason)
+
+    try:
+        result = client.refund(out_trade_no, refund_amount, out_request_no, reason)
+    except Exception as exc:
+        # 网络抖动等场景退款单保留 PROCESSING，可通过退款查询接口对账补状态
+        log.exception("退款请求失败: %s", out_request_no)
+        return jsonify({
+            "error": f"退款失败: {exc}",
+            "out_request_no": out_request_no,
+            "hint": "退款单已保留，可调用退款查询接口确认最终状态",
+        }), 502
+
+    changed, refund = store.mark_refund_success(
+        out_request_no, result.get("trade_no"), result
+    )
+    log.info("退款成功: 订单=%s 退款单=%s 金额=%s 幂等变更=%s",
+             out_trade_no, out_request_no, refund_amount, changed)
+    latest_order = store.get_order(out_trade_no)
+    latest_order["refunds"] = store.list_refunds(out_trade_no)
+    return jsonify({
+        "refund": refund,
+        "order": latest_order,
+    })
+
+
+@app.get("/api/orders/<out_trade_no>/refunds")
+def list_refunds(out_trade_no: str):
+    if store.get_order(out_trade_no) is None:
+        return jsonify({"error": "订单不存在"}), 404
+    return jsonify(store.list_refunds(out_trade_no))
+
+
+@app.get("/api/refunds/<out_request_no>")
+def query_refund(out_request_no: str):
+    """退款查询：本地状态 + 支付宝侧状态对账，PROCESSING 单可借此补单。"""
+    refund = store.get_refund(out_request_no)
+    if refund is None:
+        return jsonify({"error": "退款单不存在"}), 404
+
+    remote = None
+    if refund["status"] != "REFUND_SUCCESS":
+        try:
+            remote = client.refund_query(refund["out_trade_no"], out_request_no)
+            # 支付宝侧已退成功但本地仍在处理中：补落账（内部幂等）
+            if remote.get("refund_status") == "REFUND_SUCCESS" or remote.get("code") == "10000":
+                store.mark_refund_success(out_request_no, remote.get("trade_no"), remote)
+                refund = store.get_refund(out_request_no)
+        except Exception:
+            log.exception("退款查询失败，保留本地状态: %s", out_request_no)
+
+    return jsonify({"refund": refund, "remote": remote})
+
+
+# ---------------------------------------------------------------- 对账单
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+@app.get("/api/bills")
+def bill_url():
+    bill_type = request.args.get("bill_type", "trade")
+    bill_date = request.args.get("bill_date", "").strip()
+    if bill_type not in ("trade", "signcustomer"):
+        return jsonify({"error": "bill_type 仅支持 trade 或 signcustomer"}), 400
+    if not _DATE_RE.match(bill_date):
+        return jsonify({"error": "bill_date 格式应为 YYYY-MM-DD"}), 400
+
+    try:
+        url = client.bill_download_url(bill_type, bill_date)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+    return jsonify({"bill_type": bill_type, "bill_date": bill_date, "download_url": url})
 
 
 if __name__ == "__main__":

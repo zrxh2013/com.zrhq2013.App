@@ -94,6 +94,60 @@ class RealAlipayClient:
             "raw": result,
         }
 
+    def close_order(self, out_trade_no: str) -> dict:
+        """关闭未支付交易（alipay.trade.close）。"""
+        result = self.sdk.api_alipay_trade_close(out_trade_no=out_trade_no)
+        if result.get("code") != "10000":
+            raise RuntimeError(
+                "关单失败: %s %s" % (result.get("code"), result.get("msg"))
+            )
+        return result
+
+    def refund(self, out_trade_no: str, refund_amount: str,
+               out_request_no: str, reason: str | None = None) -> dict:
+        """退款（alipay.trade.refund），out_request_no 为退款请求幂等键。"""
+        kwargs = {"out_request_no": out_request_no}
+        if reason:
+            kwargs["refund_reason"] = reason
+        result = self.sdk.api_alipay_trade_refund(
+            refund_amount=refund_amount,
+            out_trade_no=out_trade_no,
+            **kwargs,
+        )
+        if result.get("code") != "10000":
+            raise RuntimeError(
+                "退款失败: %s %s" % (result.get("code"), result.get("msg"))
+            )
+        return result
+
+    def refund_query(self, out_trade_no: str, out_request_no: str) -> dict:
+        """退款查询（alipay.trade.fastpay.refund.query）。"""
+        result = self.sdk.api_alipay_trade_fastpay_refund_query(
+            out_request_no=out_request_no,
+            out_trade_no=out_trade_no,
+        )
+        if result.get("code") != "10000":
+            raise RuntimeError(
+                "退款查询失败: %s %s" % (result.get("code"), result.get("msg"))
+            )
+        return result
+
+    def bill_download_url(self, bill_type: str, bill_date: str) -> str:
+        """查询对账单下载地址（alipay.data.dataservice.bill.downloadurl.query）。
+
+        bill_type: trade 业务订单明细 / signcustomer 商家签约结算明细
+        bill_date: YYYY-MM-DD
+        """
+        result = self.sdk.server_api(
+            "alipay.data.dataservice.bill.downloadurl.query",
+            {"bill_type": bill_type, "bill_date": bill_date},
+        )
+        if result.get("code") != "10000":
+            raise RuntimeError(
+                "对账地址查询失败: %s %s" % (result.get("code"), result.get("msg"))
+            )
+        return result["bill_download_url"]
+
     def verify_notify(self, form: dict) -> bool:
         """异步通知验签。form 为支付宝 POST 的全部表单字段。"""
         data = dict(form)
@@ -119,6 +173,30 @@ class DemoAlipayClient:
 
     def verify_notify(self, form: dict) -> bool:
         return False
+
+    def close_order(self, out_trade_no: str) -> dict:
+        return {"code": "10000", "trade_status": "TRADE_CLOSED",
+                "out_trade_no": out_trade_no, "demo": True}
+
+    def refund(self, out_trade_no: str, refund_amount: str,
+               out_request_no: str, reason: str | None = None) -> dict:
+        # 演示模式：退款立即成功
+        return {
+            "code": "10000",
+            "fund_change": "Y",
+            "out_trade_no": out_trade_no,
+            "out_request_no": out_request_no,
+            "refund_fee": refund_amount,
+            "trade_no": "DEMO" + uuid.uuid4().hex[:16].upper(),
+            "demo": True,
+        }
+
+    def refund_query(self, out_trade_no: str, out_request_no: str) -> dict:
+        return {"code": "10000", "refund_status": "REFUND_SUCCESS",
+                "out_request_no": out_request_no, "demo": True}
+
+    def bill_download_url(self, bill_type: str, bill_date: str) -> str:
+        raise RuntimeError("演示模式不产生真实对账单，请在 sandbox/production 模式调用")
 
     def simulate_paid(self, out_trade_no: str, on_paid):
         """8 秒后模拟买家扫码付款成功，回调走与真实 notify 相同的业务入口。"""

@@ -52,6 +52,25 @@
   .tip { font-size: 12px; color: #8a919f; margin-top: 10px; line-height: 1.6; }
   .reset { background: #f0f2f5; color: #1f2329; margin-top: 14px; }
   .reset:hover { background: #e4e7ed; }
+  .btn-secondary {
+    background: #fff; color: #1f2329; border: 1px solid #d8dce3; margin-top: 12px;
+  }
+  .btn-secondary:hover { background: #f5f6f7; }
+  .btn-danger { background: #fff; color: #d93026; border: 1px solid #f5b7b1; margin-top: 12px; }
+  .btn-danger:hover { background: #fdecea; }
+  .refund-box {
+    display: none; margin-top: 18px; text-align: left;
+    border-top: 1px solid #f0f0f0; padding-top: 16px;
+  }
+  .refund-box.show { display: block; }
+  .refund-box label { margin-top: 10px; }
+  .refund-list { margin-top: 10px; }
+  .refund-list li {
+    list-style: none; font-size: 12px; color: #646a73;
+    padding: 6px 0; border-bottom: 1px dashed #eee; word-break: break-all;
+  }
+  .badge-ok { color: #18a058; font-weight: 600; }
+  .badge-doing { color: #e8820c; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -75,6 +94,18 @@
     <div class="order-no" id="order-no"></div>
     <div class="status waiting" id="status">等待买家扫码支付…</div>
     <div class="tip" id="tip"></div>
+
+    <button type="button" class="btn-secondary" id="close-btn" onclick="closeOrder()">关闭未支付订单</button>
+
+    <div class="refund-box" id="refund-box">
+      <label>退款金额（元） · 剩余可退 <span id="remaining">–</span></label>
+      <input id="refund-amount" inputmode="decimal">
+      <label>退款原因（选填）</label>
+      <input id="refund-reason" placeholder="如：买家申请退货退款" maxlength="128">
+      <button type="button" class="btn-danger" id="refund-btn" onclick="refundOrder()">申请退款</button>
+      <ul class="refund-list" id="refund-list"></ul>
+    </div>
+
     <button type="button" class="reset" onclick="location.reload()">重新下单</button>
   </div>
 </div>
@@ -88,6 +119,7 @@ const STATUS_TEXT = {
   TRADE_CLOSED: '交易已关闭'
 };
 let pollTimer = null;
+let currentOrder = null;
 
 async function loadHealth() {
   try {
@@ -116,18 +148,87 @@ function setStatus(status) {
   return ['TRADE_SUCCESS', 'TRADE_FINISHED', 'TRADE_CLOSED'].includes(status);
 }
 
+function renderActions(order) {
+  const waiting = ['CREATED', 'WAIT_BUYER_PAY'].includes(order.status);
+  const paid = ['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(order.status);
+  document.getElementById('close-btn').style.display = waiting ? 'block' : 'none';
+
+  const refundBox = document.getElementById('refund-box');
+  refundBox.classList.toggle('show', paid);
+  if (!paid) return;
+
+  const refunded = parseFloat(order.refunded_amount || '0');
+  const remaining = (parseFloat(order.total_amount) - refunded).toFixed(2);
+  document.getElementById('remaining').textContent = remaining + ' 元';
+  const amountInput = document.getElementById('refund-amount');
+  if (!amountInput.value) amountInput.value = remaining;
+  amountInput.disabled = parseFloat(remaining) <= 0;
+  document.getElementById('refund-btn').disabled = parseFloat(remaining) <= 0;
+
+  const list = document.getElementById('refund-list');
+  list.innerHTML = (order.refunds || []).map(r => `
+    <li>
+      <span class="${r.status === 'REFUND_SUCCESS' ? 'badge-ok' : 'badge-doing'}">
+        ${r.status === 'REFUND_SUCCESS' ? '✓ 已退款' : '处理中'}
+      </span>
+      ¥${r.refund_amount} · ${r.out_request_no}${r.reason ? ' · ' + r.reason : ''}
+    </li>`).join('');
+}
+
 function startPolling(outTradeNo) {
   pollTimer = setInterval(async () => {
     try {
       const res = await fetch('/api/orders/' + outTradeNo);
       const order = await res.json();
+      currentOrder = order;
       const finished = setStatus(order.status);
+      renderActions(order);
       if (finished) {
         clearInterval(pollTimer);
         document.getElementById('submit-btn').disabled = false;
       }
     } catch (e) { /* 轮询失败保留定时器，下次重试 */ }
   }, 2000);
+}
+
+async function closeOrder() {
+  if (!currentOrder || !confirm('确认关闭该未支付订单？')) return;
+  try {
+    const res = await fetch('/api/orders/' + currentOrder.out_trade_no + '/close',
+      { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '关单失败');
+    clearInterval(pollTimer);
+    currentOrder = data;
+    setStatus(data.status);
+    renderActions(data);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function refundOrder() {
+  if (!currentOrder) return;
+  const refundAmount = document.getElementById('refund-amount').value.trim();
+  const reason = document.getElementById('refund-reason').value.trim();
+  const btn = document.getElementById('refund-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/orders/' + currentOrder.out_trade_no + '/refund', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refund_amount: refundAmount, reason })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '退款失败');
+    currentOrder = data.order;
+    document.getElementById('refund-amount').value = '';
+    renderActions(currentOrder);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 document.getElementById('pay-form').addEventListener('submit', async (e) => {
@@ -153,7 +254,11 @@ document.getElementById('pay-form').addEventListener('submit', async (e) => {
     document.getElementById('pay-amount').textContent = '¥ ' + data.total_amount;
     document.getElementById('order-no').textContent = '订单号：' + data.out_trade_no;
     document.getElementById('pay-box').classList.add('show');
+    document.getElementById('refund-amount').value = '';
+    currentOrder = { out_trade_no: data.out_trade_no, total_amount: data.total_amount,
+                     status: data.status, refunds: [], refunded_amount: '0.00' };
     setStatus(data.status);
+    renderActions(currentOrder);
     startPolling(data.out_trade_no);
   } catch (err) {
     errEl.textContent = err.message;
