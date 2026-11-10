@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>支付宝当面付 · 最小闭环演示</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f0f2f5; color: #1f2329; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .card {
+    background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.08);
+    width: 100%; max-width: 440px; padding: 32px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #8a919f; font-size: 13px; margin-bottom: 20px; }
+  .mode {
+    display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    margin-bottom: 20px; font-weight: 600;
+  }
+  .mode.demo { background: #fff3e0; color: #e8820c; }
+  .mode.sandbox { background: #e8f3ff; color: #1476ff; }
+  .mode.production { background: #e8f8ee; color: #18a058; }
+  label { display: block; font-size: 13px; color: #646a73; margin: 14px 0 6px; }
+  input {
+    width: 100%; padding: 11px 12px; border: 1px solid #d8dce3; border-radius: 10px;
+    font-size: 15px; outline: none; transition: border-color .15s;
+  }
+  input:focus { border-color: #1677ff; }
+  button {
+    width: 100%; margin-top: 22px; padding: 13px; border: none; border-radius: 10px;
+    background: #1677ff; color: #fff; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+  }
+  button:hover { background: #0e5fd8; }
+  button:disabled { background: #a0bff5; cursor: not-allowed; }
+  .error { color: #d93026; font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .pay-box { text-align: center; margin-top: 24px; display: none; }
+  .pay-box.show { display: block; }
+  .pay-box img { width: 220px; height: 220px; border: 1px solid #eee; border-radius: 12px; padding: 8px; }
+  .amount { font-size: 26px; font-weight: 700; color: #d93026; margin: 14px 0 4px; }
+  .order-no { font-size: 12px; color: #8a919f; word-break: break-all; }
+  .status {
+    margin-top: 16px; padding: 10px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  }
+  .status.waiting { background: #fff7e6; color: #e8820c; }
+  .status.success { background: #e8f8ee; color: #18a058; }
+  .status.closed { background: #f5f5f5; color: #8a919f; }
+  .tip { font-size: 12px; color: #8a919f; margin-top: 10px; line-height: 1.6; }
+  .reset { background: #f0f2f5; color: #1f2329; margin-top: 14px; }
+  .reset:hover { background: #e4e7ed; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>支付宝当面付 · 扫码支付</h1>
+  <p class="sub">预下单 → 扫码支付 → 异步验签 → 幂等入账 完整闭环</p>
+  <span id="mode" class="mode">加载中…</span>
+
+  <form id="pay-form">
+    <label for="subject">商品名称</label>
+    <input id="subject" name="subject" value="测试商品-无线蓝牙耳机" maxlength="256" required>
+    <label for="amount">支付金额（元）</label>
+    <input id="amount" name="amount" value="0.01" inputmode="decimal" required>
+    <button type="submit" id="submit-btn">生成收款二维码</button>
+    <div class="error" id="error"></div>
+  </form>
+
+  <div class="pay-box" id="pay-box">
+    <img id="qr-img" alt="支付二维码">
+    <div class="amount" id="pay-amount"></div>
+    <div class="order-no" id="order-no"></div>
+    <div class="status waiting" id="status">等待买家扫码支付…</div>
+    <div class="tip" id="tip"></div>
+    <button type="button" class="reset" onclick="location.reload()">重新下单</button>
+  </div>
+</div>
+
+<script>
+const STATUS_TEXT = {
+  CREATED: '订单创建中…',
+  WAIT_BUYER_PAY: '等待买家扫码支付…',
+  TRADE_SUCCESS: '✓ 支付成功',
+  TRADE_FINISHED: '✓ 交易完成',
+  TRADE_CLOSED: '交易已关闭'
+};
+let pollTimer = null;
+
+async function loadHealth() {
+  try {
+    const res = await fetch('/api/health');
+    const data = await res.json();
+    const el = document.getElementById('mode');
+    el.textContent = data.mode_label;
+    el.className = 'mode ' + data.mode;
+    if (data.mode === 'demo') {
+      document.getElementById('tip').textContent =
+        '演示模式无需真实付款：下单后约 8 秒系统自动模拟支付成功回调。';
+    } else {
+      document.getElementById('tip').textContent =
+        '请使用支付宝扫码完成支付；支付结果以服务端异步通知验签为准。';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function setStatus(status) {
+  const el = document.getElementById('status');
+  el.textContent = STATUS_TEXT[status] || status;
+  el.className = 'status ' + (
+    ['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(status) ? 'success'
+    : status === 'TRADE_CLOSED' ? 'closed' : 'waiting'
+  );
+  return ['TRADE_SUCCESS', 'TRADE_FINISHED', 'TRADE_CLOSED'].includes(status);
+}
+
+function startPolling(outTradeNo) {
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/orders/' + outTradeNo);
+      const order = await res.json();
+      const finished = setStatus(order.status);
+      if (finished) {
+        clearInterval(pollTimer);
+        document.getElementById('submit-btn').disabled = false;
+      }
+    } catch (e) { /* 轮询失败保留定时器，下次重试 */ }
+  }, 2000);
+}
+
+document.getElementById('pay-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('error');
+  errEl.textContent = '';
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: document.getElementById('subject').value,
+        total_amount: document.getElementById('amount').value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '下单失败');
+
+    document.getElementById('qr-img').src = data.qr_image;
+    document.getElementById('pay-amount').textContent = '¥ ' + data.total_amount;
+    document.getElementById('order-no').textContent = '订单号：' + data.out_trade_no;
+    document.getElementById('pay-box').classList.add('show');
+    setStatus(data.status);
+    startPolling(data.out_trade_no);
+  } catch (err) {
+    errEl.textContent = err.message;
+    btn.disabled = false;
+  }
+});
+
+loadHealth();
+</script>
+</body>
+</html>
