@@ -21,6 +21,19 @@ if ! command -v ./gradlew &> /dev/null; then
     exit 1
 fi
 
+# 同步 H5 应用到 Android assets（排除 node_modules 与服务端依赖）
+echo "📦 同步 webapp → app/src/main/assets/webapp ..."
+SYNC_TARGET="app/src/main/assets/webapp"
+rm -rf "$SYNC_TARGET"
+mkdir -p "$SYNC_TARGET"
+if command -v rsync &> /dev/null; then
+  rsync -a --exclude 'node_modules' --exclude 'package-lock.json' webapp/ "$SYNC_TARGET/"
+else
+  cp -R webapp/* "$SYNC_TARGET/"
+  rm -rf "$SYNC_TARGET/node_modules"
+fi
+echo "✅ 同步完成"
+
 # 清理旧文件
 echo "🧹 正在清理旧构建文件..."
 ./gradlew clean > /dev/null 2>&1

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>受益人声明书（委托公证正式版）</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="doc-wrap" id="doc">
+    <h1>受 益 人 声 明 书</h1>
+    <div class="doc-no">
+      公证申请编号：<code id="d-certno">--</code> ｜ 提存案件编号：<code id="d-caseno">--</code>
+    </div>
+
+    <div class="doc-section">
+      <h3>一、声明人基本信息</h3>
+      <table>
+        <tr><th>声明人（受益人）</th><td id="d-beneficiary">--</td></tr>
+        <tr><th>证件号码</th><td id="d-beneficiary-id">--</td></tr>
+        <tr><th>联系电话</th><td id="d-phone">--</td></tr>
+        <tr><th>信托名称</th><td id="d-trust-name">--</td></tr>
+        <tr><th>委托人</th><td id="d-grantor">--</td></tr>
+        <tr><th>受托人 / 信托机构</th><td id="d-trustee">--</td></tr>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h3>二、声明事项</h3>
+      <p>本人作为上述信托之受益人，经中国委托公证人（香港）见证，郑重声明如下：</p>
+      <p>1. 本人已完整阅读并充分理解信托文件全部条款，知悉信托财产的管理、运用与分配安排，自愿接受受益人地位及相应权利义务。</p>
+      <p>2. 本人确认信托提存标的为 <b id="d-amount">--</b>（币种：<b id="d-ccy">--</b>），提存至本人指定之 TRON 网络钱包地址 <code id="d-wallet">--</code>，本人对该钱包及对应私钥拥有完整、排他的控制权。</p>
+      <p>3. 本人知悉并同意：本次公证申请之文书指纹（SHA-256：<code id="d-fp">--</code>）随提存交易 memo 写入 TRON 区块链永久存证，任何第三方均可通过区块链浏览器与官方核查系统独立核验，指纹不符即表明文书被篡改或系伪造。</p>
+      <p>4. 本人保证上述声明真实、完整，如有虚假，愿承担由此产生的全部法律责任；本人知悉伪造、变造公证文书属刑事罪行，可处监禁。</p>
+    </div>
+
+    <div class="doc-section">
+      <h3>三、信托目的与分配条件（摘要）</h3>
+      <p id="d-purpose">--</p>
+      <table>
+        <tr><th>信托期限</th><td id="d-term">--</td></tr>
+        <tr><th>设立日期</th><td id="d-setupdate">--</td></tr>
+        <tr><th>出具机构</th><td>叶谢邓律师行 Y.T. Ting &amp; Y.T. HO（中国委托公证人 · 香港）</td></tr>
+      </table>
+    </div>
+
+    <div class="sign-block">
+      <div>
+        <div>声明人（受益人）签署：</div>
+        <div class="sig">日期：______年____月____日</div>
+      </div>
+      <div>
+        <div>中国委托公证人签署及盖章：</div>
+        <div class="sig">日期：______年____月____日</div>
+      </div>
+    </div>
+
+    <!-- ========== 防伪验证页脚（5 条官方实查通道，禁止虚构 verify 链接） ========== -->
+    <div class="foot">
+      <b style="color:#7f1d1d;">🛡 电子公证书 / 委托公证文书防伪验证通道（经官方实查，5 条可核验路径）：</b><br/>
+      ① 【司法部官方 · 最权威】中国委托公证（香港）核查系统：<code>https://clshkl.moj.gov.cn/</code>（主办：中国法律服务（香港）有限公司 · 咨询 +852 2827 9700）<br/>
+      ② 【国家政务平台】中国法律服务网（12348 中国法网）政务服务：<code>https://zwfw.12348.gov.cn/</code> → 查询服务 →「委托公证文书（香港）核查」入口<br/>
+      ③ 【委托公证人协会】中国委托公证人协会有限公司（CAAO）：<code>https://www.caao.org.hk</code> · 电话 (852) 2877 8775 · 「中国委托公证服务平台」iOS/Android/微信小程序<br/>
+      ④ 【出具律所核验】叶谢邓律师行公证查询：<code>(852) 6888-9999</code> / <code>(852) 9109-9999</code>（内地热线 131-4389-6699）· 线上核验表单 <code>https://www.ytt.com.hk/zh-hans/enquiry-form/</code> · 委托公证专页 <code>https://www.ytt.so/</code><br/>
+      ⑤ 【⛓ 区块链独立核验（任何人可查）】TRONSCAN：<code>https://tronscan.io</code> &nbsp;|&nbsp; Etherscan：<code>https://etherscan.io</code> → 输入公证书首页存证交易哈希或 SHA-256 指纹（哈希不符 = 伪造）<br/>
+      <span style="display:block;margin-top:6px;color:#9a3412;">收费依据脚注：香港委托公证按事项计件收费，基础标准参见行业说明
+        <sup><a href="https://www.gangtonghk.com/a/115270.html" target="_blank" rel="noopener">[1]</a></sup>，最终以出具律师行报价为准。</span>
+    </div>
+  </div>
+
+  <div class="doc-actions no-print" style="max-width:720px;margin:0 auto;padding:10px 26px;">
+    <button class="btn btn-primary" onclick="window.print()">🖨 打印 / 另存 PDF</button>
+    <a class="btn btn-ghost" href="index.html">← 返回提存平台</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v === undefined || v === '' || v === null) ? '--' : v; };
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  if (!id) return;
+  try {
+    const map = JSON.parse(localStorage.getItem('trustEscrow.sessions.v1') || '{}');
+    const s = map[id];
+    if (!s) return;
+    const t = s.trust || {}, n = s.notarization || {}, e = s.escrow || {};
+    set('d-certno', n.certNo);
+    set('d-caseno', s.caseNo);
+    set('d-beneficiary', t.beneficiary);
+    set('d-beneficiary-id', t.beneficiaryId);
+    set('d-phone', t.phone);
+    set('d-trust-name', t.trustName);
+    set('d-grantor', t.grantor);
+    set('d-trustee', t.trustee);
+    set('d-amount', t.amount + ' ' + t.ccy);
+    set('d-ccy', t.ccy);
+    set('d-wallet', e.wallet);
+    set('d-fp', n.fingerprint);
+    set('d-purpose', t.purpose);
+    set('d-term', t.term);
+    set('d-setupdate', t.setupDate);
+  } catch (err) {
+    console.warn('声明书数据加载失败：', err);
+  }
+})();
+</script>
+</body>
+</html>

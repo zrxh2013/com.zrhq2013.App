@@ -22,6 +22,19 @@ if not exist "gradlew.bat" (
     exit /b 1
 )
 
+REM 同步 H5 应用到 Android assets（排除 node_modules）
+echo 同步 webapp -^> app\src\main\assets\webapp ...
+if exist "app\src\main\assets\webapp" rmdir /s /q "app\src\main\assets\webapp"
+mkdir "app\src\main\assets\webapp"
+where robocopy >nul 2>&1
+if not errorlevel 1 (
+    robocopy "webapp" "app\src\main\assets\webapp" /E /XD node_modules /XF package-lock.json >nul
+) else (
+    xcopy "webapp\*" "app\src\main\assets\webapp\" /E /Y /I >nul
+)
+echo 同步完成
+echo.
+
 echo 清理旧构建文件...
 gradlew.bat clean > nul 2>&1
 

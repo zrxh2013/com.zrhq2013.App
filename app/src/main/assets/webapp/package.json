@@ -1,0 +1,18 @@
+{
+  "name": "trust-escrow-notary-webapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "信托账户完整公证提存平台：H5 前端 + TRON 提存服务 + PDF 凭证工具",
+  "main": "server/escrow-server.js",
+  "scripts": {
+    "start": "node server/escrow-server.js",
+    "voucher": "node tools/generate-voucher.js"
+  },
+  "dependencies": {
+    "pdfkit": "^0.15.0",
+    "tronweb": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
