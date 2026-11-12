@@ -1,0 +1,26 @@
+# ===== 敏感凭据（禁止提交）=====
+.env
+.env.local
+.env.*.local
+webapp/.env
+**/.env
+
+# ===== Node 依赖与构建产物 =====
+node_modules/
+webapp/node_modules/
+*.log
+npm-debug.log*
+
+# ===== Android / Gradle =====
+.gradle/
+build/
+app/build/
+local.properties
+captures/
+*.apk
+*.aab
+
+# ===== 系统/编辑器 =====
+.DS_Store
+.idea/
+.vscode/

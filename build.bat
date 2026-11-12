@@ -28,9 +28,16 @@ if exist "app\src\main\assets\webapp" rmdir /s /q "app\src\main\assets\webapp"
 mkdir "app\src\main\assets\webapp"
 where robocopy >nul 2>&1
 if not errorlevel 1 (
-    robocopy "webapp" "app\src\main\assets\webapp" /E /XD node_modules /XF package-lock.json >nul
+    REM 安全红线：.env 含签名私钥，严禁打入 APK assets
+    robocopy "webapp" "app\src\main\assets\webapp" /E /XD node_modules /XF package-lock.json .env ".env.*" >nul
 ) else (
     xcopy "webapp\*" "app\src\main\assets\webapp\" /E /Y /I >nul
+    if exist "app\src\main\assets\webapp\.env" del /f /q "app\src\main\assets\webapp\.env"
+    del /f /q "app\src\main\assets\webapp\.env.*" >nul 2>&1
+)
+if exist "app\src\main\assets\webapp\.env" (
+    echo [安全拦截] .env 不得存在于 APK 资源中
+    exit /b 1
 )
 echo 同步完成
 echo.

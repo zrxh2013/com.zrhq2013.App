@@ -27,10 +27,17 @@ SYNC_TARGET="app/src/main/assets/webapp"
 rm -rf "$SYNC_TARGET"
 mkdir -p "$SYNC_TARGET"
 if command -v rsync &> /dev/null; then
-  rsync -a --exclude 'node_modules' --exclude 'package-lock.json' webapp/ "$SYNC_TARGET/"
+  # 安全红线：.env 含签名私钥，严禁打入 APK assets
+  rsync -a --exclude 'node_modules' --exclude 'package-lock.json' \
+    --exclude '.env' --exclude '.env.*' --exclude '.env.local' \
+    webapp/ "$SYNC_TARGET/"
 else
   cp -R webapp/* "$SYNC_TARGET/"
-  rm -rf "$SYNC_TARGET/node_modules"
+  rm -rf "$SYNC_TARGET/node_modules" "$SYNC_TARGET/.env" "$SYNC_TARGET"/.env.*
+fi
+if [ -f "$SYNC_TARGET/.env" ]; then
+  echo "❌ 安全拦截：$SYNC_TARGET/.env 不得存在于 APK 资源中"
+  exit 1
 fi
 echo "✅ 同步完成"
 
