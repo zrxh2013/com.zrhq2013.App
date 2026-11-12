@@ -72,6 +72,56 @@ function getTron(network) {
   return new TronWeb({ fullHost: cfg.fullHost, privateKey: key });
 }
 
+/* 手动序列化带 memo(data) 的 TransferContract 并签名。
+ * 原因：tronweb 6.5.x 的 sendTrx 的 getTransactionOptions 只提取 blockHeader，
+ *       丢弃 options.data；且 TransferContract proto 没有 data 字段。
+ * 方案：借用 sendTrx 取区块引用，手动按 TRON 官方 proto 重序列化，
+ *       memo 写入 raw_data.data（field 10，tag 0x52），而非 TransferContract。
+ *       用 sha256 重算 txID，再用 crypto.signTransaction 直接对 txID 签名。
+ * 无 memo 时输出与 tronweb 逐字节一致。 */
+async function buildSignedTransferTx(tw, to, amountSun, memoHex) {
+  const encVarint = (n) => { let v = BigInt(n); const out = []; while (v >= 0x80n) { out.push(Number(v & 0x7fn) | 0x80); v >>= 7n; } out.push(Number(v)); return Buffer.from(out); };
+  const encBytes = (tag, buf) => Buffer.concat([Buffer.from([tag]), encVarint(buf.length), buf]);
+  const encVarintField = (tag, n) => Buffer.concat([Buffer.from([tag]), encVarint(n)]);
+  const fromHex = (s) => Buffer.from(String(s).replace(/^0x/, ''), 'hex');
+
+  const baseTx = await tw.transactionBuilder.sendTrx(to, amountSun);
+  const r = baseTx.raw_data;
+  const v = baseTx.raw_data.contract[0].parameter.value;
+
+  // TransferContract: owner_address(1) / to_address(2) / amount(3) — 无 data 字段
+  const transfer = Buffer.concat([
+    encBytes(0x0a, fromHex(v.owner_address)),
+    encBytes(0x12, fromHex(v.to_address)),
+    encVarintField(0x18, v.amount),
+  ]);
+
+  const typeUrl = Buffer.from('type.googleapis.com/protocol.TransferContract', 'utf8');
+  const any = Buffer.concat([encBytes(0x0a, typeUrl), encBytes(0x12, transfer)]);
+  const contract = Buffer.concat([encVarintField(0x08, 1), encBytes(0x12, any)]);
+
+  // raw_data: ref_block_bytes(1) / ref_block_hash(4) / expiration(8) / data(10) / contract(11) / timestamp(14)
+  const rawParts = [
+    encBytes(0x0a, fromHex(r.ref_block_bytes)),
+    encBytes(0x22, fromHex(r.ref_block_hash)),
+    encVarintField(0x40, r.expiration),
+  ];
+  if (memoHex) rawParts.push(encBytes(0x52, fromHex(memoHex))); // field 10 = data, tag 0x52
+  rawParts.push(encBytes(0x5a, contract));
+  rawParts.push(encVarintField(0x70, r.timestamp));
+  const rawData = Buffer.concat(rawParts);
+
+  const raw_data_hex = rawData.toString('hex');
+  const txID = tw.utils.ethersUtils.sha256(rawData).replace(/^0x/, '');
+  const signedObj = tw.utils.crypto.signTransaction(process.env.TRON_PRIVATE_KEY.replace(/^0x/, ''), { txID });
+
+  baseTx.txID = txID;
+  baseTx.raw_data_hex = raw_data_hex;
+  baseTx.signature = signedObj.signature;
+  if (memoHex) baseTx.raw_data.data = memoHex.toLowerCase(); // 仅用于 JSON 自省
+  return baseTx;
+}
+
 async function apiBalance(url) {
   const address = url.searchParams.get('address') || '';
   const network = url.searchParams.get('network') || TRON_NETWORK;
@@ -85,8 +135,7 @@ async function apiAnchor(body) {
   const network = body.network || TRON_NETWORK;
   if (!isHex(body.memoHex)) throw new Error('memoHex 非法（须为偶数长度十六进制，≤900 字节）');
   const tw = getTron(network);
-  const tx = await tw.transactionBuilder.sendTrx(BURN_ADDRESS, 1, undefined, { data: body.memoHex.toLowerCase() });
-  const signed = await tw.trx.sign(tx);
+  const signed = await buildSignedTransferTx(tw, BURN_ADDRESS, 1, body.memoHex.toLowerCase());
   const r = await tw.trx.sendRawTransaction(signed);
   if (!r.result) throw new Error('锚定交易广播被节点拒绝: ' + JSON.stringify(r));
   return { txid: r.txid, burn: BURN_ADDRESS, network, explorer: (network === 'nile' ? 'https://nile.tronscan.org/#/transaction/' : 'https://tronscan.io/#/transaction/') + r.txid };
@@ -109,12 +158,10 @@ async function apiTransfer(body) {
     return { txid, token, to, amountSun, network, note: 'TRC20 标准转账不携带 memo，文书指纹请通过 /api/anchor 锚定' };
   }
 
-  const opts = body.memoHex ? { data: body.memoHex.toLowerCase() } : undefined;
-  const tx = await tw.transactionBuilder.sendTrx(to, amountSun, undefined, opts);
-  const signed = await tw.trx.sign(tx);
+  const signed = await buildSignedTransferTx(tw, to, amountSun, body.memoHex ? body.memoHex.toLowerCase() : undefined);
   const r = await tw.trx.sendRawTransaction(signed);
   if (!r.result) throw new Error('提存交易广播被节点拒绝: ' + JSON.stringify(r));
-  return { txid, token: 'TRX', to, amountSun, network, explorer: (network === 'nile' ? 'https://nile.tronscan.org/#/transaction/' : 'https://tronscan.io/#/transaction/') + r.txid };
+  return { txid: r.txid, token: 'TRX', to, amountSun, network, explorer: (network === 'nile' ? 'https://nile.tronscan.org/#/transaction/' : 'https://tronscan.io/#/transaction/') + r.txid };
 }
 
 async function apiTxInfo(hash, network) {
