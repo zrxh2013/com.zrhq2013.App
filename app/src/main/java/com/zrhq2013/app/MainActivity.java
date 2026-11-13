@@ -13,6 +13,7 @@ import android.os.Environment;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.MimeTypeMap;
+import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -21,6 +22,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -34,11 +38,15 @@ public class MainActivity extends AppCompatActivity {
     private static final String APP_URL = "https://www.lingguang.com/share/CHAT-27eb3584-c60f-40ff-a042-ba5a820de81550?sharemedium=others";
     private static final int FILE_CHOOSER_RESULT_CODE = 1;
     private static final int REQUEST_LOCATION_PERMISSION = 2;
+    private static final int REQUEST_MEDIA_PERMISSION = 3;
     private ValueCallback<Uri[]> filePathCallback;
 
     // 网页定位授权回调，等待运行时权限申请结果后再回调
     private GeolocationPermissions.Callback geolocationCallback;
     private String geolocationOrigin;
+
+    // 网页相机/麦克风授权请求，等待运行时权限申请结果后再回调
+    private PermissionRequest pendingMediaPermissionRequest;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,6 +154,52 @@ public class MainActivity extends AppCompatActivity {
             public void onGeolocationPermissionsHidePrompt() {
                 // 网页关闭定位请求时无需额外处理
             }
+
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                // 网页通过 getUserMedia 等申请相机/麦克风时触发，
+                // 将 WebView 资源映射为对应的 Android 运行时权限
+                List<String> requiredPermissions = new ArrayList<>();
+                for (String resource : request.getResources()) {
+                    if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+                        requiredPermissions.add(Manifest.permission.CAMERA);
+                    } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+                        requiredPermissions.add(Manifest.permission.RECORD_AUDIO);
+                    }
+                }
+
+                // 无需映射权限的资源（如 MIDI）直接放行
+                if (requiredPermissions.isEmpty()) {
+                    request.grant(request.getResources());
+                    return;
+                }
+
+                // 过滤出尚未授予的权限
+                List<String> ungrantedPermissions = new ArrayList<>();
+                for (String permission : requiredPermissions) {
+                    if (ContextCompat.checkSelfPermission(MainActivity.this, permission)
+                            != PackageManager.PERMISSION_GRANTED) {
+                        ungrantedPermissions.add(permission);
+                    }
+                }
+
+                if (ungrantedPermissions.isEmpty()) {
+                    // 所需权限均已授予，直接放行网页请求的全部资源
+                    request.grant(request.getResources());
+                } else {
+                    // 暂存请求，待运行时权限弹窗结果返回后再授权或拒绝
+                    pendingMediaPermissionRequest = request;
+                    ActivityCompat.requestPermissions(MainActivity.this,
+                            ungrantedPermissions.toArray(new String[0]),
+                            REQUEST_MEDIA_PERMISSION);
+                }
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                // 网页主动取消请求时清理暂存，避免回调错位
+                pendingMediaPermissionRequest = null;
+            }
         });
 
         // 文件下载交由系统 DownloadManager 处理，支持通知栏进度与公共下载目录
@@ -195,6 +249,26 @@ public class MainActivity extends AppCompatActivity {
             geolocationCallback.invoke(geolocationOrigin, granted, false);
             geolocationCallback = null;
             geolocationOrigin = null;
+        } else if (requestCode == REQUEST_MEDIA_PERMISSION
+                && pendingMediaPermissionRequest != null) {
+            boolean allGranted = grantResults.length > 0;
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+            if (allGranted) {
+                // 全部所需权限已授予，放行网页请求的资源
+                pendingMediaPermissionRequest.grant(
+                        pendingMediaPermissionRequest.getResources());
+            } else {
+                // 存在被拒绝的权限，拒绝网页请求并提示用户
+                pendingMediaPermissionRequest.deny();
+                Toast.makeText(this, R.string.permission_media_denied,
+                        Toast.LENGTH_SHORT).show();
+            }
+            pendingMediaPermissionRequest = null;
         }
     }
 
