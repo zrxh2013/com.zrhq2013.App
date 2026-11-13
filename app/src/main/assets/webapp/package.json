@@ -5,8 +5,10 @@
   "description": "信托账户完整公证提存平台：H5 前端 + TRON 提存服务 + PDF 凭证工具",
   "main": "server/escrow-server.js",
   "scripts": {
-    "start": "node server/escrow-server.js",
-    "voucher": "node tools/generate-voucher.js"
+    "start": "node --env-file-if-exists=.env server/escrow-server.js",
+    "start:nile": "node --env-file-if-exists=.env -e \"process.env.TRON_NETWORK='nile';require('./server/escrow-server.js')\"",
+    "voucher": "node tools/generate-voucher.js",
+    "key:gen": "node -e \"const {TronWeb}=require('tronweb');TronWeb.createRandom().then(a=>console.log('PRIVATE_KEY='+a.privateKey+'\\nADDRESS='+new TronWeb({fullHost:'https://api.trongrid.io',privateKey:a.privateKey}).defaultAddress.base58))\""
   },
   "dependencies": {
     "pdfkit": "^0.15.0",

@@ -11,6 +11,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT || 8899);
 const ROOT = path.resolve(__dirname, '..');
@@ -122,17 +123,150 @@ async function buildSignedTransferTx(tw, to, amountSun, memoHex) {
   return baseTx;
 }
 
+/* ============================================================
+ * 模拟区块链钱包（SIMCHAIN · 本地演示专用）
+ * 边界声明：
+ *  - 不连接任何真实 TRON 节点，不产生真实交易，不具链上存证法律效力
+ *  - 所有 txID 由本地 sha256 生成，记录一律带 simulated 标记，绝不返回 tronscan 链接
+ *  - 状态持久化到 server/.mock-chain.json（gitignore，权限 600），支持一键重置
+ * ============================================================ */
+const MOCK_STATE_FILE = path.join(__dirname, '.mock-chain.json');
+const MOCK_CHAIN_ID = 'SIMCHAIN-LOCAL';
+const MOCK_FEE_SUN = 1000;
+
+function loadMockState() {
+  try { return JSON.parse(fs.readFileSync(MOCK_STATE_FILE, 'utf8')); }
+  catch { return null; }
+}
+function saveMockState() {
+  try {
+    fs.writeFileSync(MOCK_STATE_FILE, JSON.stringify(mock.state, null, 2));
+    fs.chmodSync(MOCK_STATE_FILE, 0o600);
+  } catch (e) { console.warn('[mock] 状态持久化失败:', e.message); }
+}
+function genMockPair(label) {
+  if (!TronWeb) throw Object.assign(new Error('tronweb 未安装，模拟钱包不可用'), { code: 'NO_TRONWEB' });
+  const r = TronWeb.createRandom();
+  const address = typeof r.address === 'string' ? r.address : r.address.base58; // tronweb 6.x 返回字符串，旧版返回 {base58}
+  return { label, address, key: r.privateKey.replace(/^0x/, ''), createdAt: Date.now() };
+}
+
+const mock = {
+  state: loadMockState() || { chainId: MOCK_CHAIN_ID, height: 0, seq: 0, signer: null, wallet: null, accounts: {}, txs: {} },
+  pair(kind) {
+    if (!this.state[kind]) { this.state[kind] = genMockPair(kind); saveMockState(); }
+    return this.state[kind];
+  },
+  ensureAccount(addr) {
+    if (!this.state.accounts[addr]) this.state.accounts[addr] = { balanceSun: 0, createdAt: Date.now() };
+    return this.state.accounts[addr];
+  },
+  balance(addr) { return (this.state.accounts[addr] && this.state.accounts[addr].balanceSun) || 0; },
+  faucet(addr, amountSun) {
+    if (!isValidT(addr)) throw new Error('地址格式不正确');
+    if (!Number.isInteger(amountSun) || amountSun <= 0 || amountSun > 100_000_000 * SUN) throw new Error('模拟充值金额非法');
+    const acc = this.ensureAccount(addr);
+    acc.balanceSun += amountSun;
+    saveMockState();
+    return { simulated: true, address: addr, balanceSun: acc.balanceSun, balanceTrx: acc.balanceSun / SUN };
+  },
+  nextTxId(parts) {
+    this.state.seq += 1;
+    return crypto.createHash('sha256')
+      .update(this.state.seq + '|' + parts.join('|') + '|' + Date.now() + '|' + crypto.randomBytes(8).toString('hex'))
+      .digest('hex');
+  },
+  submit({ from, to, amountSun, memoHex, kind, token }) {
+    if (!isValidT(from) || !isValidT(to)) throw new Error('地址格式不正确');
+    const sender = this.ensureAccount(from);
+    this.ensureAccount(to);
+    const fee = kind === 'ANCHOR' ? 0 : MOCK_FEE_SUN;
+    const need = amountSun + fee;
+    if (sender.balanceSun < need) {
+      throw Object.assign(new Error(`模拟钱包余额不足：需 ${need / SUN} TRX，当前 ${sender.balanceSun / SUN} TRX，请先领取模拟测试币`), { code: 'MOCK_INSUFFICIENT' });
+    }
+    sender.balanceSun -= need;
+    this.state.accounts[to].balanceSun += amountSun;
+    this.state.height += 1;
+    const txID = this.nextTxId([from, to, String(amountSun), memoHex || '', kind]);
+    const ts = Date.now();
+    let memoText = null;
+    if (memoHex) { try { memoText = Buffer.from(memoHex, 'hex').toString('utf8'); } catch { memoText = null; } }
+    const rec = {
+      txID, simulated: true, network: 'mock', chainId: MOCK_CHAIN_ID,
+      blockNumber: this.state.height, timestamp: ts, blockTime: ts,
+      from, to, amountSun, feeSun: fee, token: token || 'TRX',
+      kind, memoHex: memoHex || null, memoText,
+      contractRet: 'SUCCESS', confirmed: true, confirmations: 1
+    };
+    this.state.txs[txID] = rec;
+    saveMockState();
+    return rec;
+  },
+  tx(hash) {
+    const rec = this.state.txs[hash];
+    if (!rec) throw Object.assign(new Error('模拟链上未找到该交易'), { code: 'MOCK_TX_NOT_FOUND' });
+    return { ...rec, confirmations: this.state.height - rec.blockNumber + 1 };
+  },
+  transactions(addr) {
+    return Object.values(this.state.txs)
+      .filter((t) => !addr || t.from === addr || t.to === addr)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 50);
+  },
+  reset() {
+    this.state = { chainId: MOCK_CHAIN_ID, height: 0, seq: 0, signer: null, wallet: null, accounts: {}, txs: {} };
+    this.pair('signer'); this.pair('wallet');
+    this.faucet(this.state.signer.address, 10000 * SUN);
+    saveMockState();
+    return this.overview();
+  },
+  overview() {
+    const signer = this.pair('signer');
+    const wallet = this.pair('wallet');
+    if (this.balance(signer.address) === 0 && this.state.height === 0) this.faucet(signer.address, 10000 * SUN);
+    return {
+      chainId: MOCK_CHAIN_ID, simulated: true, height: this.state.height,
+      signer: { address: signer.address, balanceSun: this.balance(signer.address), balanceTrx: this.balance(signer.address) / SUN },
+      wallet: { address: wallet.address, balanceSun: this.balance(wallet.address), balanceTrx: this.balance(wallet.address) / SUN }
+    };
+  }
+};
+
 async function apiBalance(url) {
   const address = url.searchParams.get('address') || '';
   const network = url.searchParams.get('network') || TRON_NETWORK;
   if (!isValidT(address)) throw new Error('地址格式不正确');
+  if (network === 'mock') {
+    const sun = mock.balance(address);
+    return { address, network: 'mock', simulated: true, balanceSun: sun, balanceTrx: sun / SUN };
+  }
   const tw = new TronWeb({ fullHost: (NETWORKS[network] || NETWORKS.mainnet).fullHost });
   const acc = await tw.trx.getAccount(address);
   return { address, network, balanceSun: acc.balance || 0, balanceTrx: (acc.balance || 0) / SUN };
 }
 
+async function apiMockAnchor(body) {
+  if (!isHex(body.memoHex)) throw new Error('memoHex 非法（须为偶数长度十六进制，≤900 字节）');
+  const from = mock.pair('signer').address;
+  const rec = mock.submit({ from, to: BURN_ADDRESS, amountSun: 1, memoHex: body.memoHex.toLowerCase(), kind: 'ANCHOR' });
+  return { txid: rec.txID, burn: BURN_ADDRESS, network: 'mock', simulated: true, explorer: null, block: rec.blockNumber };
+}
+
+async function apiMockTransfer(body) {
+  const { to, amountSun, token } = body;
+  if (!isValidT(to)) throw new Error('收款地址格式不正确');
+  if (!Number.isInteger(amountSun) || amountSun <= 0) throw new Error('amountSun 须为正整数');
+  if (body.memoHex && !isHex(body.memoHex)) throw new Error('memoHex 非法');
+  if (token && token.startsWith('USDT')) throw new Error('模拟链当前仅支持 TRX 模拟提存，USDT 请在真实网络演练');
+  const from = mock.pair('signer').address;
+  const rec = mock.submit({ from, to, amountSun, memoHex: body.memoHex ? body.memoHex.toLowerCase() : null, kind: 'TRANSFER', token: 'TRX' });
+  return { txid: rec.txID, token: 'TRX', to, amountSun, network: 'mock', simulated: true, explorer: null, block: rec.blockNumber };
+}
+
 async function apiAnchor(body) {
   const network = body.network || TRON_NETWORK;
+  if (network === 'mock') return apiMockAnchor(body);
   if (!isHex(body.memoHex)) throw new Error('memoHex 非法（须为偶数长度十六进制，≤900 字节）');
   const tw = getTron(network);
   const signed = await buildSignedTransferTx(tw, BURN_ADDRESS, 1, body.memoHex.toLowerCase());
@@ -143,6 +277,7 @@ async function apiAnchor(body) {
 
 async function apiTransfer(body) {
   const network = body.network || TRON_NETWORK;
+  if (network === 'mock') return apiMockTransfer(body);
   const { to, amountSun, token } = body;
   if (!isValidT(to)) throw new Error('收款地址格式不正确');
   if (!Number.isInteger(amountSun) || amountSun <= 0) throw new Error('amountSun 须为正整数');
@@ -166,6 +301,16 @@ async function apiTransfer(body) {
 
 async function apiTxInfo(hash, network) {
   if (!/^[0-9a-fA-F]{64}$/.test(hash)) throw new Error('交易哈希须为 64 位十六进制');
+  if (network === 'mock') {
+    const rec = mock.tx(hash);
+    return {
+      hash, network: 'mock', simulated: true,
+      block: rec.blockNumber, confirmed: true,
+      feeSun: rec.feeSun, contractRet: rec.contractRet,
+      memoHex: rec.memoHex, memoText: rec.memoText, kind: rec.kind,
+      confirmations: rec.confirmations, from: rec.from, to: rec.to, amountSun: rec.amountSun
+    };
+  }
   const tw = new TronWeb({ fullHost: (NETWORKS[network] || NETWORKS.mainnet).fullHost });
   const [info, tx] = await Promise.allSettled([
     tw.trx.getTransactionInfo(hash), tw.trx.getTransaction(hash)
@@ -205,8 +350,23 @@ const server = http.createServer(async (req, res) => {
         ok: true, service: 'trust-escrow-notary', version: '1.0.0',
         defaultNetwork: TRON_NETWORK,
         tronwebInstalled: !!TronWeb,
-        keyConfigured: !!process.env.TRON_PRIVATE_KEY
+        keyConfigured: !!process.env.TRON_PRIVATE_KEY,
+        mockAvailable: !!TronWeb,
+        mockWallet: TronWeb ? mock.overview().wallet.address : null
       });
+    }
+    if (url.pathname === '/api/mock/wallet' && req.method === 'GET') return json(res, 200, mock.overview());
+    if (url.pathname === '/api/mock/balance' && req.method === 'GET') {
+      const address = url.searchParams.get('address') || mock.pair('signer').address;
+      const sun = mock.balance(address);
+      return json(res, 200, { simulated: true, address, balanceSun: sun, balanceTrx: sun / SUN });
+    }
+    if (url.pathname === '/api/mock/tx' && req.method === 'GET') {
+      return json(res, 200, mock.tx(url.searchParams.get('hash') || ''));
+    }
+    if (url.pathname === '/api/mock/transactions' && req.method === 'GET') {
+      const addr = url.searchParams.get('address') || '';
+      return json(res, 200, { simulated: true, height: mock.state.height, transactions: mock.transactions(addr) });
     }
     if (url.pathname === '/api/balance' && req.method === 'GET') return json(res, 200, await apiBalance(url));
     if (url.pathname === '/api/tx' && req.method === 'GET') {
@@ -217,6 +377,13 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       if (url.pathname === '/api/anchor') return json(res, 200, await apiAnchor(body));
       if (url.pathname === '/api/transfer') return json(res, 200, await apiTransfer(body));
+      if (url.pathname === '/api/mock/faucet') {
+        const addr = body.address || mock.pair('signer').address;
+        const amountSun = Number.isFinite(Number(body.amountTrx)) && Number(body.amountTrx) > 0
+          ? Math.round(Number(body.amountTrx) * SUN) : 1000 * SUN;
+        return json(res, 200, mock.faucet(addr, amountSun));
+      }
+      if (url.pathname === '/api/mock/reset') return json(res, 200, mock.reset());
     }
     if (url.pathname.startsWith('/api/')) return json(res, 404, { error: '未知接口' });
     return serveStatic(req, res, url.pathname);
@@ -233,6 +400,7 @@ server.listen(PORT, () => {
   console.log('  本地入口:    http://localhost:' + PORT + '/');
   console.log('  默认网络:    ' + TRON_NETWORK);
   console.log('  tronweb:     ' + (TronWeb ? '已安装' : '未安装（仅静态托管）'));
-  console.log('  签名私钥:    ' + (process.env.TRON_PRIVATE_KEY ? '已从环境变量加载' : '未配置（签名接口 503，只读可用）'));
+  console.log('  模拟链:      ' + (TronWeb ? 'SIMCHAIN 已就绪（/api/mock/*，本地演示不触达真实网络）' : '不可用'));
+  console.log('  签名私钥:    ' + (process.env.TRON_PRIVATE_KEY ? '已从环境变量加载' : '未配置（真实链签名接口 503，模拟链不受影响）'));
   console.log('==========================================================');
 });

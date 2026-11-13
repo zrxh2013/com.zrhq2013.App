@@ -26,6 +26,13 @@ const NETWORKS = {
     grid: 'https://nile.trongrid.io',
     scanApi: 'https://nile.tronscan.org',
     scanTx: 'https://nile.tronscan.org/#/transaction/'
+  },
+  mock: {
+    label: '模拟链（本地演示）',
+    simulated: true,
+    grid: '',
+    scanApi: '',
+    scanTx: ''
   }
 };
 
@@ -240,11 +247,12 @@ function renderSessionList() {
     return;
   }
   wrap.innerHTML = list.map((s) => {
+    const mockTag = (s.escrow && s.escrow.simulated) ? '<span class="tag net-mock">模拟</span> ' : '';
     const st = s.chain && s.chain.transferTx ? '<span class="tag ok">已上链</span>'
       : (s.escrow && s.escrow.memoHex ? '<span class="tag pending">待广播</span>' : '');
     return `<div class="session-item" data-id="${s.id}">
       <div>
-        <div class="si-main">${s.trust.trustName || '未命名信托'} ${st}</div>
+        <div class="si-main">${mockTag}${s.trust.trustName || '未命名信托'} ${st}</div>
         <div class="si-sub">${s.caseNo} ｜ ${(s.trust.amount || '--')} ${s.trust.ccy || ''} ｜ ${s.updatedAt.replace('T', ' ').slice(0, 16)}</div>
       </div>
       <div style="color:#b08a3e;font-weight:800;">恢复 ›</div>
@@ -327,6 +335,7 @@ function hydrateForms() {
     $('memo-preview').textContent = JSON.stringify(e.memoObj, null, 2);
     $('escrow-action-card').style.display = 'block';
   }
+  applyNetworkUI();
 }
 
 function validateStep(step) {
@@ -426,7 +435,7 @@ async function buildMemo() {
   const memoObj = {
     ty: 'TRUST_ESCROW',
     v: 1,
-    net: network === 'mainnet' ? 'TRON' : 'NILE',
+    net: network === 'mock' ? 'SIM' : (network === 'mainnet' ? 'TRON' : 'NILE'),
     caseNo: session.caseNo,
     certNo: ensureCertNo(),
     fp: session.notarization.fingerprint,
@@ -442,6 +451,7 @@ async function buildMemo() {
   session.escrow = {
     network, wallet, amount, ccy: session.trust.ccy,
     sender: $('f-sender').value.trim(),
+    simulated: network === 'mock',
     memoObj, memoHex, memoBytes: memoHex.length / 2
   };
   persist(session);
@@ -456,10 +466,13 @@ async function buildMemo() {
 
 function writeOfflinePackage() {
   const e = session.escrow;
+  const isMock = e.simulated === true;
   const pkg = {
     packageType: 'TRUST_ESCROW_OFFLINE_PACKAGE',
     version: APP_VERSION,
     exportedAt: nowIso(),
+    simulated: isMock,
+    simulationNotice: isMock ? '本提存包基于本地模拟链 SIMCHAIN 生成，不含真实链上交易，不具存证法律效力，仅供流程演示' : undefined,
     caseNo: session.caseNo,
     notarization: {
       certNo: session.notarization.certNo,
@@ -467,20 +480,23 @@ function writeOfflinePackage() {
       fingerprint: session.notarization.fingerprint
     },
     network: e.network,
-    fullHost: NETWORKS[e.network].grid,
+    fullHost: isMock ? 'SIMCHAIN-LOCAL（本地模拟，无真实节点）' : NETWORKS[e.network].grid,
     transfer: { to: e.wallet, amountSun: toSun(e.amount), token: e.ccy, memoHex: e.memoHex },
     anchor: { to: BURN_ADDRESS, amountSun: 1, memoHex: e.memoHex },
     memoObject: e.memoObj,
-    broadcastScript:
-      "// 受托人广播示例（私钥通过环境变量 TRON_PRIVATE_KEY 注入，切勿硬编码）\n" +
-      "const { TronWeb } = require('tronweb');\n" +
-      `const tw = new TronWeb({ fullHost: '${NETWORKS[e.network].grid}', privateKey: process.env.TRON_PRIVATE_KEY });\n` +
-      "(async () => {\n" +
-      "  const tx = await tw.transactionBuilder.sendTrx(process.env.TO_ADDRESS, Number(process.env.AMOUNT_SUN), undefined, { data: process.env.MEMO_HEX });\n" +
-      "  const signed = await tw.trx.sign(tx);\n" +
-      "  const r = await tw.trx.sendRawTransaction(signed);\n" +
-      "  console.log('txID:', r.txid);\n" +
-      "})();"
+    broadcastScript: isMock
+      ? "// 模拟链广播（本地服务，无需私钥与真实网络）\n" +
+        "// POST /api/anchor { network:'mock', memoHex } 或 POST /api/transfer { network:'mock', to, amountSun, memoHex }\n" +
+        "// 查询：GET /api/mock/tx?hash=<txid>；重置：POST /api/mock/reset"
+      : "// 受托人广播示例（私钥通过环境变量 TRON_PRIVATE_KEY 注入，切勿硬编码）\n" +
+        "const { TronWeb } = require('tronweb');\n" +
+        `const tw = new TronWeb({ fullHost: '${NETWORKS[e.network].grid}', privateKey: process.env.TRON_PRIVATE_KEY });\n` +
+        "(async () => {\n" +
+        "  const tx = await tw.transactionBuilder.sendTrx(process.env.TO_ADDRESS, Number(process.env.AMOUNT_SUN), undefined, { data: process.env.MEMO_HEX });\n" +
+        "  const signed = await tw.trx.sign(tx);\n" +
+        "  const r = await tw.trx.sendRawTransaction(signed);\n" +
+        "  console.log('txID:', r.txid);\n" +
+        "})();"
   };
   e.packageFile = `escrow-package-${session.caseNo}.json`;
   e.packageJson = JSON.stringify(pkg, null, 2);
@@ -495,12 +511,103 @@ async function detectServer() {
     serverOnline = r.ok;
     const info = r.ok ? await r.json().catch(() => ({})) : {};
     el.innerHTML = serverOnline
-      ? `提存服务：<span class="tag ok">在线</span> ${info.keyConfigured ? '· 已配置签名私钥，可直接上链' : '· 未配置私钥（只读模式，可查余额/确认）'}`
+      ? `提存服务：<span class="tag ok">在线</span> ${info.keyConfigured ? '· 已配置签名私钥，可直接上链' : '· 未配置私钥（真实链只读，模拟链不受影响）'}${info.mockAvailable ? ' · <span class="tag net-mock">模拟链可用</span>' : ''}`
       : '提存服务不可用';
   } catch {
     serverOnline = false;
     el.innerHTML = '提存服务：<span class="tag pending">离线模式</span>（已生成离线提存包，可由受托人配置服务后广播，系统不会虚构交易哈希）';
   }
+}
+
+/* ---------- 模拟区块链钱包（SIMCHAIN 本地演示） ---------- */
+function isMockNetwork() { return $('f-network').value === 'mock'; }
+
+function applyNetworkUI() {
+  const mock = isMockNetwork();
+  $('mock-wallet-card').style.display = mock ? 'block' : 'none';
+  if (mock) refreshMockWallet();
+}
+
+async function refreshMockWallet() {
+  try {
+    const r = await fetchWithTimeout('/api/mock/wallet', {}, 6000);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    $('mock-signer-addr').textContent = j.signer.address;
+    $('mock-wallet-addr').textContent = j.wallet.address;
+    $('mock-signer-balance').textContent = j.signer.balanceTrx + ' TRX（模拟）';
+    $('mock-wallet-balance').textContent = j.wallet.balanceTrx + ' TRX（模拟）';
+    $('mock-block-height').textContent = j.height;
+    // 仅在空值或当前已是模拟案件时自动填充，避免覆盖用户在真实网络填的地址
+    if (!$('f-wallet').value.trim() || (session.escrow && session.escrow.simulated)) $('f-wallet').value = j.wallet.address;
+    if (!$('f-sender').value.trim() || (session.escrow && session.escrow.simulated)) $('f-sender').value = j.signer.address;
+    return j;
+  } catch (err) {
+    toast('模拟钱包加载失败：' + err.message);
+    return null;
+  }
+}
+
+async function mockFaucet() {
+  const btn = $('btn-mock-faucet'); btn.disabled = true;
+  try {
+    const r = await fetchWithTimeout('/api/mock/faucet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amountTrx: 1000 })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || '领取失败');
+    toast('已领取 1000 模拟 TRX（演示资产，无真实价值）');
+    await refreshMockWallet();
+  } catch (err) { toast(err.message); }
+  finally { btn.disabled = false; }
+}
+
+async function mockReset() {
+  if (!confirm('确认重置模拟链？将清空全部模拟交易与余额并重新生成模拟钱包，不影响任何真实数据。')) return;
+  try {
+    const r = await fetchWithTimeout('/api/mock/reset', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) throw new Error((j && j.error) || '重置失败');
+    $('f-wallet').value = j.wallet.address;
+    $('f-sender').value = j.signer.address;
+    await refreshMockWallet();
+    toast('模拟链已重置');
+  } catch (err) { toast(err.message); }
+}
+
+async function openMockExplorer(hash) {
+  const body = $('mock-modal-body');
+  body.textContent = '加载中…';
+  $('mock-modal').classList.add('show');
+  try {
+    const r = await fetchWithTimeout(`/api/mock/tx?hash=${encodeURIComponent(hash)}`, {}, 6000);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || '查询失败');
+    const rows = [
+      ['模拟链 ID', j.chainId],
+      ['交易哈希', j.txID, true],
+      ['区块高度', '#' + j.blockNumber + '（确认数 ' + j.confirmations + '）'],
+      ['交易类型', j.kind === 'ANCHOR' ? 'Memo 锚定（1 sun 黑洞）' : '提存转账'],
+      ['发送方', j.from, true],
+      ['接收方', j.to, true],
+      ['金额', (j.amountSun / SUN) + ' TRX（模拟）'],
+      ['手续费', (j.feeSun / SUN) + ' TRX（模拟）'],
+      ['合约结果', j.contractRet + ' · confirmed=' + j.confirmed],
+      ['时间', new Date(j.timestamp).toLocaleString()]
+    ];
+    let memoPretty = j.memoText || '';
+    try { memoPretty = JSON.stringify(JSON.parse(memoPretty), null, 2); } catch { /* 非 JSON 则原样展示 */ }
+    body.innerHTML = rows.map(([k, v, mono]) =>
+      `<div class="mv-row"><span class="k">${k}</span><span class="v ${mono ? 'mono' : ''}">${v}</span></div>`).join('') +
+      (j.memoHex ? `<div class="mv-row"><span class="k">链上 Memo</span></div><pre>${escapeHtml(memoPretty)}</pre>` : '');
+  } catch (err) {
+    body.textContent = '加载失败：' + err.message;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function logChain(line) {
@@ -519,6 +626,13 @@ async function queryBalance() {
   const out = $('balance-out');
   out.textContent = '查询中…';
   try {
+    if (network === 'mock') {
+      const r = await fetchWithTimeout(`/api/mock/balance?address=${encodeURIComponent(addr)}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || '查询失败');
+      out.innerHTML = `模拟钱包余额：<b>${j.balanceTrx} TRX</b>（<span class="tag net-mock">SIMCHAIN 模拟</span>，无真实价值）`;
+      return;
+    }
     if (serverOnline) {
       const r = await fetchWithTimeout(`/api/balance?address=${encodeURIComponent(addr)}&network=${network}`);
       const j = await r.json();
@@ -542,7 +656,7 @@ async function callAnchor() {
   if (!serverOnline) return toast('离线模式：请使用已下载的提存包由受托人广播');
   const e = session.escrow;
   const btn = $('btn-anchor'); btn.disabled = true;
-  logChain('→ 请求锚定存证（memo 写入黑洞地址 1 sun）…');
+  logChain(e.simulated ? '→ 请求【模拟链】锚定存证（memo 写入模拟黑洞地址 1 sun）…' : '→ 请求锚定存证（memo 写入黑洞地址 1 sun）…');
   try {
     const r = await fetchWithTimeout('/api/anchor', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -551,9 +665,10 @@ async function callAnchor() {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || '锚定失败');
     session.chain.anchorTx = j.txid;
+    if (j.simulated) session.chain.simulated = true;
     persist(session);
-    logChain('✔ 锚定交易已广播：' + j.txid);
-    toast('锚定存证已上链，开始轮询确认…');
+    logChain((e.simulated ? '✔【模拟】锚定交易已生成：' : '✔ 锚定交易已广播：') + j.txid);
+    toast(e.simulated ? '模拟锚定存证已生成（非真实上链）' : '锚定存证已上链，开始轮询确认…');
     pollConfirmation(j.txid);
   } catch (err) {
     logChain('✖ ' + err.message);
@@ -564,9 +679,12 @@ async function callAnchor() {
 async function callTransfer() {
   if (!serverOnline) return toast('离线模式：请使用已下载的提存包由受托人广播');
   const e = session.escrow;
-  if (!confirm(`确认向 ${e.wallet} 提存 ${e.amount} ${e.ccy}？该操作不可撤销。`)) return;
+  const tip = e.simulated
+    ? `【模拟演示】确认向模拟钱包 ${e.wallet} 提存 ${e.amount} ${e.ccy}？该操作仅发生在本地模拟链，不转移真实资产。`
+    : `确认向 ${e.wallet} 提存 ${e.amount} ${e.ccy}？该操作不可撤销。`;
+  if (!confirm(tip)) return;
   const btn = $('btn-transfer'); btn.disabled = true;
-  logChain('→ 请求正式提存转账…');
+  logChain(e.simulated ? '→ 请求【模拟链】正式提存转账…' : '→ 请求正式提存转账…');
   try {
     const r = await fetchWithTimeout('/api/transfer', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -579,9 +697,10 @@ async function callTransfer() {
     if (!r.ok) throw new Error(j.error || '转账失败');
     session.chain.transferTx = j.txid;
     session.chain.status = 'broadcast';
+    if (j.simulated) session.chain.simulated = true;
     persist(session);
-    logChain('✔ 提存交易已广播：' + j.txid);
-    toast('提存交易已广播，等待链上确认…');
+    logChain((e.simulated ? '✔【模拟】提存交易已生成：' : '✔ 提存交易已广播：') + j.txid);
+    toast(e.simulated ? '模拟提存交易已生成（非真实转账）' : '提存交易已广播，等待链上确认…');
     pollConfirmation(j.txid);
   } catch (err) {
     logChain('✖ ' + err.message);
@@ -589,8 +708,32 @@ async function callTransfer() {
   } finally { btn.disabled = false; }
 }
 
+async function pollMockConfirmation(txHash) {
+  logChain('→ 查询 SIMCHAIN 模拟链交易状态…');
+  try {
+    const r = await fetchWithTimeout(`/api/mock/tx?hash=${encodeURIComponent(txHash)}`, {}, 6000);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || '查询失败');
+    session.chain = {
+      ...session.chain,
+      status: 'confirmed', simulated: true,
+      block: j.blockNumber, contractRet: j.contractRet,
+      confirmed: true, confirmations: j.confirmations,
+      lastPolled: nowIso()
+    };
+    persist(session);
+    logChain(`✔【模拟】区块 #${j.blockNumber} ｜ contractRet=${j.contractRet} ｜ 确认数=${j.confirmations}（本地模拟数据，非真实链上确认）`);
+    await refreshMockWallet();
+    return true;
+  } catch (err) {
+    logChain('✖ 模拟链查询失败：' + err.message);
+    return false;
+  }
+}
+
 async function pollConfirmation(txHash) {
   const e = session.escrow;
+  if (e.network === 'mock') return pollMockConfirmation(txHash);
   const base = NETWORKS[e.network].scanApi;
   logChain('→ 轮询 TronScan 确认状态…');
   for (let i = 0; i < 8; i++) {
@@ -622,12 +765,20 @@ async function pollConfirmation(txHash) {
 function finalizeSession() {
   const s = session;
   const t = s.trust || {}, n = s.notarization || {}, e = s.escrow || {}, c = s.chain || {};
-  const netTag = e.network ? `<span class="tag ${e.network === 'mainnet' ? 'net-main' : 'net-nile'}">${NETWORKS[e.network].label}</span>` : '';
-  const chainStatus = c.transferTx
-    ? (c.confirmed ? '<span class="tag ok">已确认</span>' : '<span class="tag pending">已广播待确认</span>')
-    : '<span class="tag pending">离线提存包待广播</span>';
+  const isMock = e.network === 'mock' || c.simulated === true;
+  const netTag = e.network
+    ? (isMock
+      ? '<span class="tag net-mock">模拟链 · 演示</span>'
+      : `<span class="tag ${e.network === 'mainnet' ? 'net-main' : 'net-nile'}">${NETWORKS[e.network].label}</span>`)
+    : '';
+  const chainStatus = isMock
+    ? (c.transferTx ? '<span class="tag net-mock">模拟已确认（非真实链上）</span>' : '<span class="tag pending">模拟待执行</span>')
+    : (c.transferTx
+      ? (c.confirmed ? '<span class="tag ok">已确认</span>' : '<span class="tag pending">已广播待确认</span>')
+      : '<span class="tag pending">离线提存包待广播</span>');
   $('summary-list').innerHTML = [
     ['案件编号', s.caseNo],
+    ['环境性质', isMock ? '🧪 本地模拟演示（不具真实存证效力）' : '真实 TRON 网络链上存证'],
     ['信托名称', t.trustName || '--'],
     ['委托人', `${t.grantor || '--'}（${t.grantorId || '--'}）`],
     ['受益人', `${t.beneficiary || '--'}（${t.beneficiaryId || '--'}）`],
@@ -638,7 +789,7 @@ function finalizeSession() {
     ['提存网络', netTag || '--'],
     ['收款钱包', e.wallet || '--', true],
     ['锚定交易', c.anchorTx || '（未执行）', true],
-    ['提存交易', c.transferTx || '（待广播，无虚构哈希）', true],
+    ['提存交易', c.transferTx || (isMock ? '（待执行模拟交易）' : '（待广播，无虚构哈希）'), true],
     ['链上状态', chainStatus],
     ['区块高度', c.block ?? '--']
   ].map(([k, v, mono]) =>
@@ -661,13 +812,25 @@ function finalizeSession() {
   $('done-v-12348').href = `${af.gov12348}?service=${safe('委托公证文书（香港）核查')}&${q}`;
   $('done-v-caao').href = `${af.caao}contacts?${q}`;
   const chainBtn = $('done-v-chain');
-  if (c.transferTx || c.anchorTx) {
-    const hash = c.transferTx || c.anchorTx;
-    chainBtn.href = (NETWORKS[e.network]?.scanTx || af.tronscan) + hash;
-    chainBtn.querySelector('b').textContent = '区块链独立核验（TRONSCAN）';
+  if (isMock) {
+    // 模拟链：哈希仅能在本地模拟浏览器查看，禁止指向 TRONSCAN（否则构成伪造核验入口）
+    const mockHash = c.transferTx || c.anchorTx || '';
+    chainBtn.removeAttribute('href');
+    chainBtn.href = '#';
+    chainBtn.dataset.mockHash = mockHash;
+    chainBtn.querySelector('b').textContent = mockHash
+      ? '🧪 模拟链交易查看（本地演示数据，非 TRONSCAN）'
+      : '🧪 模拟链（尚未生成模拟交易）';
   } else {
-    chainBtn.href = af.tronscan;
-    chainBtn.querySelector('b').textContent = '区块链独立核验（TRONSCAN 首页）';
+    delete chainBtn.dataset.mockHash;
+    if (c.transferTx || c.anchorTx) {
+      const hash = c.transferTx || c.anchorTx;
+      chainBtn.href = (NETWORKS[e.network]?.scanTx || af.tronscan) + hash;
+      chainBtn.querySelector('b').textContent = '区块链独立核验（TRONSCAN）';
+    } else {
+      chainBtn.href = af.tronscan;
+      chainBtn.querySelector('b').textContent = '区块链独立核验（TRONSCAN 首页）';
+    }
   }
 
   $('btn-open-declaration').href = `beneficiary-declaration-official.html?id=${encodeURIComponent(s.id)}`;
@@ -683,6 +846,9 @@ function downloadPackage() {
 }
 
 function voucherHint() {
+  if (session.escrow && session.escrow.simulated) {
+    return toast('模拟链交易无真实链上记录，不能生成 TRONSCAN 转账凭证；请在真实网络完成提存后使用', 4200);
+  }
   const hash = session.chain && session.chain.transferTx;
   const cmd = hash
     ? `node tools/generate-voucher.js ${hash} voucher-${session.caseNo}.pdf`
@@ -717,11 +883,21 @@ function bindEvents() {
   });
   $('btn-download-package').addEventListener('click', downloadPackage);
   $('btn-voucher-hint').addEventListener('click', voucherHint);
+  $('btn-mock-faucet').addEventListener('click', mockFaucet);
+  $('btn-mock-refresh').addEventListener('click', () => refreshMockWallet().then(() => toast('模拟钱包已刷新')));
+  $('btn-mock-reset').addEventListener('click', mockReset);
+  $('mock-modal-close').addEventListener('click', () => $('mock-modal').classList.remove('show'));
+  $('mock-modal').addEventListener('click', (ev) => { if (ev.target === $('mock-modal')) $('mock-modal').classList.remove('show'); });
+  $('done-v-chain').addEventListener('click', (ev) => {
+    const h = ev.currentTarget.dataset.mockHash;
+    if (h) { ev.preventDefault(); openMockExplorer(h); }
+  });
   $('btn-new-case').addEventListener('click', () => { newSession(); resetForms(); goStep(1, true); toast('已创建新案件'); });
   $('f-network').addEventListener('change', () => {
     if (session.escrow) { session.escrow = {}; persist(session); }
     $('memo-preview').textContent = '尚未生成';
     $('escrow-action-card').style.display = 'none';
+    applyNetworkUI();
   });
 }
 
@@ -733,6 +909,7 @@ function resetForms() {
   $('escrow-action-card').style.display = 'none';
   $('balance-out').textContent = '';
   document.querySelectorAll('.field.invalid').forEach((f) => f.classList.remove('invalid'));
+  applyNetworkUI();
 }
 
 /* ---------- 启动 ---------- */
@@ -750,4 +927,5 @@ function resetForms() {
   }
   $('f-setupdate').value = ymd();
   if (session && session.trust && session.trust.setupDate) $('f-setupdate').value = session.trust.setupDate;
+  applyNetworkUI();
 })();

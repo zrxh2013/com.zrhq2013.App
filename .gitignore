@@ -5,6 +5,10 @@
 webapp/.env
 **/.env
 
+# 模拟链本地状态（演示数据，含模拟钱包密钥，禁止提交）
+webapp/server/.mock-chain.json
+**/.mock-chain.json
+
 # ===== Node 依赖与构建产物 =====
 node_modules/
 webapp/node_modules/

@@ -173,6 +173,7 @@
           <select id="f-network">
             <option value="mainnet">TRON 主网（mainnet）</option>
             <option value="nile">Nile 测试网（nile）</option>
+            <option value="mock">🧪 模拟链（本地演示，无需测试币）</option>
           </select>
         </div>
         <div class="field">
@@ -180,6 +181,25 @@
           <input id="f-mode" readonly value="钱包地址直提 + memo 锚定" />
         </div>
       </div>
+
+      <!-- ===== 模拟区块链钱包（仅本地演示，不触达真实网络） ===== -->
+      <div class="mock-card" id="mock-wallet-card" style="display:none;">
+        <div class="mock-banner">
+          🧪 <b>模拟区块链钱包 · SIMCHAIN 本地演示环境</b><br />
+          <small>不连接真实 TRON 网络、不产生真实交易、不具链上存证法律效力；仅供完整提存流程演练，所有数据带「模拟」标记</small>
+        </div>
+        <div class="mock-row"><span class="mk">模拟签名钱包（发送方）</span><code id="mock-signer-addr">加载中…</code></div>
+        <div class="mock-row"><span class="mk">发送方余额</span><b id="mock-signer-balance">—</b></div>
+        <div class="mock-row"><span class="mk">模拟提存钱包（收款方）</span><code id="mock-wallet-addr">加载中…</code></div>
+        <div class="mock-row"><span class="mk">收款方余额</span><b id="mock-wallet-balance">—</b></div>
+        <div class="mock-row"><span class="mk">当前区块高度</span><b id="mock-block-height">0</b></div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-gold sm" id="btn-mock-faucet">🚰 领取 1000 模拟 TRX</button>
+          <button type="button" class="btn btn-ghost sm" id="btn-mock-refresh">🔄 刷新模拟钱包</button>
+        </div>
+        <button type="button" class="btn btn-ghost sm" id="btn-mock-reset" style="margin-top:8px;">♻️ 重置模拟链（清空全部演示交易）</button>
+      </div>
+
       <div class="field">
         <label>收款钱包地址（T 开头，34 位）<span class="req">*</span></label>
         <div style="display:flex;gap:8px;">
@@ -280,6 +300,18 @@
     </div>
     <button class="btn btn-gold" id="btn-new-case">＋ 新建提存案件</button>
   </section>
+
+  <!-- ===== 模拟链交易浏览器（本地演示数据，非 TRONSCAN） ===== -->
+  <div class="modal-mask" id="mock-modal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <b>🧪 模拟链交易浏览器（SIMCHAIN · 本地演示数据）</b>
+        <button type="button" id="mock-modal-close" aria-label="关闭">✕</button>
+      </div>
+      <div class="modal-warn">该交易由本地模拟链生成，<b>不是真实链上交易</b>，无法在 TRONSCAN 等官方浏览器查询，不具存证法律效力。</div>
+      <div class="modal-body" id="mock-modal-body">加载中…</div>
+    </div>
+  </div>
 
   <div class="toast" id="toast"></div>
 </div>
