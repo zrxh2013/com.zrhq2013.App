@@ -164,7 +164,7 @@ const mock = {
   balance(addr) { return (this.state.accounts[addr] && this.state.accounts[addr].balanceSun) || 0; },
   faucet(addr, amountSun) {
     if (!isValidT(addr)) throw new Error('地址格式不正确');
-    if (!Number.isInteger(amountSun) || amountSun <= 0 || amountSun > 100_000_000 * SUN) throw new Error('模拟充值金额非法');
+    if (!Number.isInteger(amountSun) || amountSun <= 0 || amountSun > 100_000_000 * SUN) throw new Error('模拟充值金额非法（须为 0~1 亿之间的正数 TRX）');
     const acc = this.ensureAccount(addr);
     acc.balanceSun += amountSun;
     saveMockState();
@@ -379,8 +379,10 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname === '/api/transfer') return json(res, 200, await apiTransfer(body));
       if (url.pathname === '/api/mock/faucet') {
         const addr = body.address || mock.pair('signer').address;
-        const amountSun = Number.isFinite(Number(body.amountTrx)) && Number(body.amountTrx) > 0
-          ? Math.round(Number(body.amountTrx) * SUN) : 1000 * SUN;
+        // 未显式传 amountTrx 时默认 1000；显式传入则严格校验，非法值拒绝而非静默回退
+        const amountSun = body.amountTrx === undefined
+          ? 1000 * SUN
+          : Math.round(Number(body.amountTrx) * SUN);
         return json(res, 200, mock.faucet(addr, amountSun));
       }
       if (url.pathname === '/api/mock/reset') return json(res, 200, mock.reset());
