@@ -14,6 +14,10 @@ description: "Bootstrap Android SDK/adb and a headless emulator in KVM-less, 4GB
 - 容器疑似重置后（`/opt/android-sdk` 或 AVD 丢失）需要恢复 Android 构建/运行环境
 - 需要用 `adb` 向模拟器安装 APK 验证
 
+> **快速恢复**：若 `/workspace/.android-bootstrap/setup.sh` 已存在（本工作区常驻），
+> 容器重置后无需手动分步执行，直接 `setsid bash /workspace/.android-bootstrap/setup.sh </dev/null >/dev/null 2>&1 &`
+> 并轮询 `cat /workspace/.android-bootstrap/stage` 即可，详见第 7 步。
+
 ## 环境基线（先用真实命令核实，不要假设）
 
 ```bash
@@ -176,6 +180,148 @@ adb shell input keyevent KEYCODE_HOME
 - 验证：`adb exec-out screencap -p > /workspace/emulator-home.png`、
   `adb shell dumpsys window | grep mCurrentFocus`（应为 launcher3）。
 
+## 第 7 步：持久化一键自举脚本（容器频繁重置时强烈推荐）
+
+**背景**：实测容器不仅会在会话间重置，还可能在一次任务**执行中途**整体重置（曾发生在
+emulator boot 阶段），分步手动执行会丢失全部进度。而 `/workspace` 与 mise 管理的 JDK
+跨重置保留，`/opt`、`~/.android`、`/tmp`、apt 包、`/usr/local/bin` 软链接均易失。
+把第 1–6 步收敛成一个放在 `/workspace/.android-bootstrap/setup.sh` 的幂等脚本，
+`setsid` 后台无人值守跑完，通过持久化的 `stage` 标记文件轮询进度，工具调用超时或
+终端被回收都不影响它；重置后重跑同一条命令即可。
+
+启动与轮询（每次调用都是独立短命令，避免长轮询被工具 6s poll 限制打断）：
+
+```bash
+setsid bash /workspace/.android-bootstrap/setup.sh </dev/null >/dev/null 2>&1 &
+cat /workspace/.android-bootstrap/stage     # 阶段标记，见下方序列
+tail -20 /workspace/.android-bootstrap/setup.log
+```
+
+阶段序列：`apt → cmdline → sdk_licenses → sdk_packages → env_links → avd →
+emulator_launch → boot → provision → done`；出现 `FATAL:<阶段>` 即该步失败，看 setup.log。
+实测端到端耗时：网络正常约 25 分钟；共享代理限速时（cmdline-tools.zip 曾只有 ~250KB/s）
+约 35–40 分钟，属正常，`du -sh /opt/android-sdk` 持续增长即健康。
+
+设计要点：`JAVA_HOME` 用 glob 动态解析 mise 小版本；所有操作幂等（`--force`、`rm -rf`、
+`ln -sf`）可安全重跑；boot 轮询同时打印 anon 内存；provision 内置 SystemUI ANR 的
+Wait 点击（183,565）与最终截图。脚本完整内容如下（文件丢失时可据此重建）：
+
+```bash
+#!/bin/bash
+# 受限容器（无 KVM / 4GB cgroup）Android SDK + AVD + 无头模拟器一键自举
+MARK=/workspace/.android-bootstrap
+mkdir -p $MARK
+exec >$MARK/setup.log 2>&1
+stage(){ echo "STAGE:$1 $(date +%T)" > $MARK/stage; }
+fatal(){ echo "FATAL:$1 $(date +%T)" > $MARK/stage; exit 1; }
+
+stage apt
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq || fatal apt_update
+apt-get install -y --no-install-recommends \
+  libgl1 libegl1 libgles2 libglx-mesa0 libglu1-mesa \
+  libpulse0 libpulse-mainloop-glib0 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6 \
+  libxrandr2 libasound2t64 libdbus-1-3 libfontconfig1 libfreetype6 \
+  libxkbcommon0 libxkbfile1 libcurl4t64 libgbm1 libx11-6 libxcb1 libx11-xcb1 \
+  libxdamage1 libxrender1 libxfixes3 libxext6 libsm6 libglib2.0-0t64 unzip || fatal apt_install
+
+stage cmdline
+mkdir -p /opt/android-sdk/cmdline-tools
+curl -sSL --retry 3 -o /tmp/cmdline-tools.zip \
+  "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" || fatal dl_cmdline
+rm -rf /tmp/ct && mkdir -p /tmp/ct && unzip -q /tmp/cmdline-tools.zip -d /tmp/ct
+rm -rf /opt/android-sdk/cmdline-tools/latest
+mv /tmp/ct/cmdline-tools /opt/android-sdk/cmdline-tools/latest
+
+export JAVA_HOME=$(ls -d /root/.local/share/mise/installs/java/17*/ 2>/dev/null | head -1)
+[ -z "$JAVA_HOME" ] && fatal no_jdk17
+export ANDROID_HOME=/opt/android-sdk
+export ANDROID_SDK_ROOT=/opt/android-sdk
+SDKM=/opt/android-sdk/cmdline-tools/latest/bin/sdkmanager
+
+stage sdk_licenses
+yes | $SDKM --licenses || fatal licenses
+stage sdk_packages
+yes | $SDKM "platform-tools" "platforms;android-34" "build-tools;34.0.0" \
+  "emulator" "system-images;android-30;default;x86_64" || fatal sdk_packages
+
+stage env_links
+cat > /etc/profile.d/android-sdk.sh <<'EOF'
+export ANDROID_HOME=/opt/android-sdk
+export ANDROID_SDK_ROOT=/opt/android-sdk
+export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator"
+EOF
+grep -q 'profile.d/android-sdk.sh' ~/.bashrc 2>/dev/null || echo 'source /etc/profile.d/android-sdk.sh' >> ~/.bashrc
+grep -q ANDROID_HOME /etc/environment 2>/dev/null || printf 'ANDROID_HOME=/opt/android-sdk\nANDROID_SDK_ROOT=/opt/android-sdk\n' >> /etc/environment
+for t in platform-tools/adb platform-tools/fastboot cmdline-tools/latest/bin/sdkmanager \
+         cmdline-tools/latest/bin/avdmanager emulator/emulator; do
+  ln -sf /opt/android-sdk/$t /usr/local/bin/$(basename $t)
+done
+
+stage avd
+echo "no" | avdmanager create avd -n aosp30 -k "system-images;android-30;default;x86_64" --force || fatal avd_create
+CFG=/root/.android/avd/aosp30.avd/config.ini
+sed -i -E '/^hw\.ramSize=/d; /^vm\.heapSize=/d; /^hw\.lcd\.(width|height|density)=/d; /^hw\.cpu\.ncore=/d' $CFG
+cat >> $CFG <<'EOF'
+hw.ramSize = 1536
+vm.heapSize = 192
+hw.cpu.ncore = 2
+hw.lcd.width = 540
+hw.lcd.height = 960
+hw.lcd.density = 240
+hw.bluetoothSupport = no
+hw.gpu.enabled = yes
+hw.gpu.mode = auto
+disk.dataPartition.size = 4096M
+EOF
+rm -f /root/.android/avd/aosp30.avd/hardware-qemu.ini*
+
+stage emulator_launch
+nohup /opt/android-sdk/emulator/emulator -avd aosp30 \
+  -no-window -no-audio -no-boot-anim -no-snapshot \
+  -no-accel -netdelay none -netspeed full -no-metrics \
+  > /tmp/emulator.log 2>&1 &
+EMU_PID=$!
+
+stage boot
+export PATH=$PATH:/opt/android-sdk/platform-tools
+adb wait-for-device
+BOOT=""
+for i in $(seq 1 24); do
+  B=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+  A=$(awk '/^anon /{printf "%.0f",$2/1024/1024}' /sys/fs/cgroup/memory.stat 2>/dev/null)
+  echo "boot_poll[$i] boot=${B:-空} anon=${A}MB"
+  [ "$B" = 1 ] && { BOOT=1; break; }
+  kill -0 $EMU_PID 2>/dev/null || fatal emulator_gone
+  sleep 25
+done
+[ "$BOOT" = 1 ] || fatal boot_timeout
+
+stage provision
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard
+adb shell svc power stayon true
+adb shell settings put system screen_off_timeout 600000
+adb shell settings put global device_provisioned 1
+adb shell settings put secure user_setup_complete 1
+adb shell am force-stop com.android.managedprovisioning 2>/dev/null
+adb shell svc bluetooth disable 2>/dev/null
+adb shell settings put global http_proxy 10.0.2.2:18080
+adb shell input keyevent KEYCODE_HOME
+sleep 75
+adb shell input tap 183 565
+sleep 20
+adb shell input keyevent KEYCODE_HOME
+sleep 25
+adb shell input tap 183 565 2>/dev/null
+sleep 10
+adb exec-out screencap -p > /workspace/emulator-home.png 2>/dev/null
+adb shell dumpsys window 2>/dev/null | grep mCurrentFocus >> $MARK/setup.log
+adb devices >> $MARK/setup.log 2>&1
+
+stage done
+```
+
 ## 常用命令
 
 ```bash
@@ -187,7 +333,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.zrhq2013.app/.MainActivity
 ```
 
-## 第 7 步（本项目）：Gradle 构建与联网排错（2026-11 实测）
+## 第 8 步（本项目）：Gradle 构建与联网排错（2026-11 实测）
 
 容器重置后项目侧还会遇到以下问题，按序处理：
 
@@ -227,4 +373,4 @@ adb shell am start -n com.zrhq2013.app/.MainActivity
 | 非交互 shell 里 `adb: command not found` | profile.d 不生效 | 用 /usr/local/bin 软链接（第 3 步） |
 | 截图纯黑、焦点 null | TCG 高负载渲染滞后 | 等待负载回落、点 Wait、回 Home 后重截 |
 | 蓝牙进程反复 Fatal signal 6 | TCG 不兼容 | `svc bluetooth disable`、AVD 设 `hw.bluetoothSupport = no` |
-| 容器又重置了 | /opt、apt、软链接均易失，mise JDK 保留 | 从第 1 步完整重跑；dexopt 成果在 ~/.android，重置后也需重建 |
+| 容器又重置了（甚至执行中途重置） | /opt、apt、软链接、~/.android、/tmp 均易失，/workspace 与 mise JDK 保留 | 首选重跑第 7 步持久化自举脚本（一条命令、stage 标记轮询）；手动方式则从第 1 步完整重跑，dexopt 成果也需重建 |
