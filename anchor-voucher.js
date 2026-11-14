@@ -24,7 +24,7 @@ const C = { g: '\x1b[32m', y: '\x1b[33m', r: '\x1b[31m', c: '\x1b[36m', d: '\x1b
 const log = (k, v) => console.log(`${k.padEnd(16)} ${v}`);
 
 function parseArgs(argv) {
-  const a = { network: 'mainnet', amount: '1', broadcast: false, to: '' };
+  const a = { network: 'mainnet', amount: '1', broadcast: false, to: '', identify: '' };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i];
     const v = argv[i + 1];
@@ -35,6 +35,7 @@ function parseArgs(argv) {
       case '--network': a.network = v; i++; break;
       case '--to': a.to = v; i++; break;
       case '--amount': a.amount = v; i++; break;
+      case '--identify': a.identify = v; i++; break;
       case '--broadcast': a.broadcast = true; break;
       case '-h': case '--help': a.help = true; break;
       default: break;
@@ -51,6 +52,7 @@ function usage() {
   --network <name>   mainnet | nile（默认 mainnet）
   --to <T地址>       接收地址（默认发送方自己）
   --amount <TRX>     附带转账金额，默认 1
+  --identify <标签>  业务标识，写入 memo 的 id 字段（如订单号/内部编号）
   --broadcast        真正广播（需 TRON_PRIVATE_KEY 环境变量）
 `);
 }
@@ -117,6 +119,7 @@ function extractFacts(d) {
     ty: 'ANCHOR',
     v: 1,
     net: args.network,
+    ...(args.identify ? { id: args.identify } : {}),
     src: f.src,
     token: f.token,
     name: f.name,
@@ -136,6 +139,7 @@ function extractFacts(d) {
   log('凭证文件', path.resolve(args.pdf));
   log('文件大小', `${(pdfBuf.length / 1024).toFixed(1)} KB`);
   log('PDF SHA-256', pdfSha);
+  log('业务标识', args.identify || '(未设置)');
   console.log('');
   log('源交易', f.src);
   log('区块高度', String(f.block));
