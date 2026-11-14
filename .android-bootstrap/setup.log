@@ -62,7 +62,7 @@ Get:22 http://mirrors.volces.com/ubuntu noble/main amd64 libgles2 amd64 1.7.0-1b
 Get:23 http://mirrors.volces.com/ubuntu noble/main amd64 libopengl0 amd64 1.7.0-1build1 [32.8 kB]
 Get:24 http://mirrors.volces.com/ubuntu noble/main amd64 libglu1-mesa amd64 9.0.2-1.1build1 [152 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 6895 kB in 3s (2599 kB/s)
+Fetched 6895 kB in 2s (4219 kB/s)
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 47457 files and directories currently installed.)
 Preparing to unpack .../00-libglib2.0-data_2.80.0-6ubuntu3.10_all.deb ...
 Unpacking libglib2.0-data (2.80.0-6ubuntu3.10) over (2.80.0-6ubuntu3.9) ...
@@ -1182,24 +1182,4 @@ ANY PRE-RELEASE MATERIALS ARE NON-QUALIFIED AND, AS SUCH, ARE PROVIDED “AS IS�
 10.8 Open Source Software. In the event Open Source software is included with Evaluation Software, such Open Source software is licensed pursuant to the applicable Open Source software license agreement identified in the Open Source software comments in the applicable source code file(s) and/or file header as indicated in the Evaluation Software. Additional detail may be available (where applicable) in the accompanying on-line documentation. With respect to the Open Source software, nothing in this Agreement limits any rights under, or grants rights that supersede, the terms of any applicable Open Source software license agreement.
 ---------------------------------------
 Accept? (y/N): All SDK package licenses accepted
-
-
-Auto-selecting single ABI x86_64
-Do you wish to create a custom hardware profile? [no] * daemon not running; starting now at tcp:5037
-* daemon started successfully
-boot_poll[1] boot=空 anon=1904MB
-boot_poll[2] boot=空 anon=2045MB
-boot_poll[3] boot=空 anon=2088MB
-boot_poll[4] boot=空 anon=2459MB
-boot_poll[5] boot=空 anon=2658MB
-boot_poll[6] boot=空 anon=2740MB
-boot_poll[7] boot=空 anon=2822MB
-boot_poll[8] boot=空 anon=2940MB
-boot_poll[9] boot=空 anon=2943MB
-boot_poll[10] boot=空 anon=2952MB
-boot_poll[11] boot=空 anon=3082MB
-boot_poll[12] boot=1 anon=3098MB
-  mCurrentFocus=Window{9b98b20 u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
-List of devices attached
-emulator-5554	device
 
