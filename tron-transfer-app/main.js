@@ -5,6 +5,17 @@ const path = require('path');
 const fs = require('fs');
 const { WalletService } = require('./lib/tron');
 
+// 容器 / 无桌面 Linux / CI 通常没有 GPU 设备，Chromium 的 GPU 进程会初始化失败，
+// 表现为控制台刷 "Exiting GPU process due to errors during initialization" 甚至白屏。
+// 仅在检测不到 GPU 设备时关闭硬件加速，普通桌面环境仍走硬件加速。
+const gpuUnavailable = process.platform === 'linux' && !fs.existsSync('/dev/dri/renderD128');
+if (gpuUnavailable || process.env.TRON_DISABLE_GPU === '1') {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('disable-dev-shm-usage');
+}
+
 const wallet = new WalletService('mainnet');
 let win = null;
 let recordsFile = '';
