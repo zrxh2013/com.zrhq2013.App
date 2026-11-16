@@ -6,10 +6,12 @@ import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.MimeTypeMap;
@@ -17,9 +19,13 @@ import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
@@ -35,6 +41,7 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private ProgressBar progressBar;
+    private View errorView;
     private static final String APP_URL = "https://www.lingguang.com/share/CHAT-27eb3584-c60f-40ff-a042-ba5a820de81550?sharemedium=others";
     private static final int FILE_CHOOSER_RESULT_CODE = 1;
     private static final int REQUEST_LOCATION_PERMISSION = 2;
@@ -55,6 +62,13 @@ public class MainActivity extends AppCompatActivity {
 
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progress_bar);
+        errorView = findViewById(R.id.error_view);
+        Button retryButton = findViewById(R.id.retry_button);
+        retryButton.setOnClickListener(v -> {
+            // 隐藏错误页并重新加载当前网址
+            errorView.setVisibility(View.GONE);
+            webView.reload();
+        });
 
         setupWebView();
         loadUrl(APP_URL);
@@ -106,6 +120,33 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 } catch (Exception e) {
                     return false;
+                }
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                // 重新开始加载时隐藏错误页，恢复 WebView
+                errorView.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                // 仅主框架（整页）失败时展示错误页，忽略图片等子资源错误
+                if (request.isForMainFrame()) {
+                    showErrorView();
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                // 主框架返回 4xx/5xx 时同样展示错误页
+                if (request.isForMainFrame() && errorResponse.getStatusCode() >= 400) {
+                    showErrorView();
                 }
             }
         });
@@ -209,6 +250,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadUrl(String url) {
         webView.loadUrl(url);
+    }
+
+    private void showErrorView() {
+        progressBar.setVisibility(ProgressBar.GONE);
+        errorView.setVisibility(View.VISIBLE);
     }
 
     @Override
