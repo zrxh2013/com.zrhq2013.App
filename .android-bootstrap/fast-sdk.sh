@@ -25,7 +25,7 @@ apt-get install -y --no-install-recommends unzip libgl1 libegl1 libgles2 libglx-
   libglib2.0-0 || echo "WARN apt 部分包安装失败，继续" >> $LOG
 
 stage cmdline
-mkdir -p $SDK/cmdline-tools
+mkdir -p $SDK/cmdline-tools /tmp/sdk-zips
 if [ ! -x $SDK/cmdline-tools/latest/bin/sdkmanager ]; then
   CT=/tmp/sdk-zips/commandlinetools-linux-11076708_latest.zip
   [ -f "$CT" ] || curl -fL --retry 5 -o "$CT" "$BASE/commandlinetools-linux-11076708_latest.zip" || fatal dl_cmdline

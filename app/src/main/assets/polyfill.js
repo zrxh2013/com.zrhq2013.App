@@ -168,6 +168,25 @@
     };
   }
 
+  /* ---- antd 5 / Chrome 83：加载结束后隐藏残留图标 ----
+   * antd 的动态 CSS 使用 Chrome 88 才支持的 :where()，旧内核会丢弃其中的
+   * 非加载态隐藏规则；业务样式又将加载容器固定为 display:flex。
+   * 仅隐藏 busy=false 加载器的直接子图标，不影响 nested-loading 的内容，
+   * 也不影响 aria-busy=true 时正常显示加载状态。
+   */
+  try {
+    var installIdleSpinCompat = function () {
+      var root = document.head || document.documentElement;
+      if (!root || document.getElementById('webview-antd-spin-compat')) return;
+      var style = document.createElement('style');
+      style.id = 'webview-antd-spin-compat';
+      style.textContent = '.ant-spin[aria-busy="false"] > .ant-spin-dot{display:none!important}';
+      root.appendChild(style);
+    };
+    installIdleSpinCompat();
+    document.addEventListener('DOMContentLoaded', installIdleSpinCompat);
+  } catch (e) { }
+
   /* ---- document.cookie 防篡改锁 ----
    * H5 的 umi.js 在模块顶层无条件调用 disableDocumentCookie()，用 configurable:false
    * 把 document.cookie 换成恒返回 "" 的 getter 与恒返回 false 的 setter，导致登录态
