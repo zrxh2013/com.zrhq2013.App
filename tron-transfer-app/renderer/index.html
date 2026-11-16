@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>TRON 转账工具</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>TRON 转账工具</h1>
+    </div>
+    <div class="net">
+      <label for="network">网络</label>
+      <select id="network">
+        <option value="mainnet">主网 Mainnet</option>
+        <option value="nile">测试网 Nile</option>
+      </select>
+      <span id="netBadge" class="badge">未连接</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>钱包</h2>
+      <div class="field">
+        <label for="pk">私钥</label>
+        <input id="pk" type="password" placeholder="64 位十六进制私钥，仅保存在内存中" autocomplete="off" />
+        <p class="hint">私钥不会写入磁盘，关闭应用即清除。请先在测试网验证流程。</p>
+      </div>
+      <div class="row">
+        <button id="btnUnlock" class="primary">解锁</button>
+        <button id="btnLock" class="ghost" disabled>锁定</button>
+        <button id="btnRefresh" class="ghost" disabled>刷新余额</button>
+      </div>
+      <div class="addr">
+        <span class="label">当前地址</span>
+        <code id="address">—</code>
+      </div>
+      <div class="balances">
+        <div class="balance">
+          <span>TRX</span>
+          <strong id="trxBalance">—</strong>
+        </div>
+        <div class="balance">
+          <span>USDT</span>
+          <strong id="usdtBalance">—</strong>
+        </div>
+      </div>
+      <div class="warn">
+        私钥即资产。仅在本机使用；不要截图、不要上传到任何网站。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>转账</h2>
+      <div class="tabs">
+        <button class="tab active" data-type="trx">TRX</button>
+        <button class="tab" data-type="usdt">USDT (TRC20)</button>
+      </div>
+
+      <div class="field">
+        <label for="to">收款地址</label>
+        <input id="to" type="text" placeholder="T 开头的 TRON 地址" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="amount">金额</label>
+        <input id="amount" type="number" min="0" step="0.000001" placeholder="0.000000" />
+      </div>
+
+      <div class="field">
+        <label for="memo">备注（可选，写入链上 memo，公开可见）</label>
+        <input id="memo" type="text" maxlength="300" placeholder="例如 订单号 INV-2026-0001" autocomplete="off" />
+      </div>
+
+      <div class="row">
+        <button id="btnEstimate" class="ghost" disabled>预估费用</button>
+        <button id="btnSend" class="primary" disabled>发送</button>
+      </div>
+
+      <div id="estimate" class="estimate hidden"></div>
+      <div id="result" class="result hidden"></div>
+      <div id="error" class="error hidden"></div>
+    </section>
+  </main>
+
+  <section class="card records">
+    <div class="records-head">
+      <h2>转账记录</h2>
+      <button id="btnExport" class="ghost">导出 CSV</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>网络</th>
+            <th>类型</th>
+            <th>接收方</th>
+            <th>金额</th>
+            <th>备注</th>
+            <th>交易</th>
+          </tr>
+        </thead>
+        <tbody id="recordsBody">
+          <tr><td colspan="7" class="empty">暂无记录</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
