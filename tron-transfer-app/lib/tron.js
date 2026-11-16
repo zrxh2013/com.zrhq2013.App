@@ -233,7 +233,7 @@ class WalletService {
       feeTrx,
       activateFee,
       warning,
-      note: '消耗能量为主；持有/质押能量可显著降低成本',
+      note: '按链上基础能量单价估算；主网动态能量系数通常使实际扣费高于此值，建议多留 TRX',
     };
   }
 
