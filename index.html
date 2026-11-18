@@ -25,7 +25,7 @@
     <div class="net">
       <select id="network" aria-label="网络">
         <option value="mainnet">主网</option>
-        <option value="nile">Nile 测试网</option>
+        <option value="nile" selected>Nile 测试网</option>
       </select>
       <span id="netBadge" class="badge">未解锁</span>
     </div>
@@ -37,7 +37,7 @@
       <div class="field">
         <label for="pk">私钥</label>
         <input id="pk" type="password" placeholder="64 位十六进制私钥" autocomplete="off" autocapitalize="off" spellcheck="false" />
-        <p class="hint">仅保存在页面内存，刷新即清除。请先切到 Nile 测试网验证。</p>
+        <p id="pkHint" class="hint">仅保存在页面内存，刷新即清除。</p>
       </div>
       <div class="row">
         <button id="btnUnlock" class="primary">解锁</button>

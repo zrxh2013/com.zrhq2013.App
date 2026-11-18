@@ -17,6 +17,11 @@ const USDT_CONTRACTS = {
   nile: 'TS3EhDATvq7UG9cEQny4EczHWcdzavGndX',
 };
 
+const DEFAULT_NETWORK = 'nile';
+const DEFAULT_ACCOUNTS = {
+  nile: 'TLruhEuA2FYwWKHKvZGE6hijMYf6PD7nur',
+};
+
 const SUN = 1_000_000;
 const MEMO_LIMIT = 900;
 const DEFAULT_ENERGY_FEE = 420;
@@ -77,6 +82,10 @@ class WalletService {
 
   setNetwork(network) {
     if (!HOSTS[network]) throw new Error('网络仅支持主网 / Nile 测试网');
+    const expected = DEFAULT_ACCOUNTS[network];
+    if (this.privateKey && expected && this.address !== expected) {
+      throw new Error(`当前私钥不是 Nile 默认账户 ${expected}`);
+    }
     this.network = network;
     this._energyFee = null;
     if (this.privateKey) this._initTron();
@@ -92,6 +101,11 @@ class WalletService {
     }
     this.privateKey = key;
     this._initTron();
+    const expected = DEFAULT_ACCOUNTS[this.network];
+    if (expected && this.address !== expected) {
+      this.lock();
+      throw new Error(`私钥与 Nile 默认账户不匹配，应为 ${expected}`);
+    }
     return this.address;
   }
 
@@ -363,6 +377,7 @@ const ui = {
   network: $('network'),
   netBadge: $('netBadge'),
   pk: $('pk'),
+  pkHint: $('pkHint'),
   btnUnlock: $('btnUnlock'),
   btnLock: $('btnLock'),
   btnRefresh: $('btnRefresh'),
@@ -384,8 +399,8 @@ const ui = {
   recordsList: $('recordsList'),
 };
 
-const wallet = new WalletService('mainnet');
-let state = { unlocked: false, network: 'mainnet', address: '' };
+const wallet = new WalletService(DEFAULT_NETWORK);
+let state = { unlocked: false, network: DEFAULT_NETWORK, address: '' };
 let type = 'trx';
 
 function fmt(n, digits = 6) {
@@ -448,6 +463,10 @@ function syncButtons() {
   ui.usdtLabel.textContent = customNileUsdt ? '测试 USDT' : 'USDT';
   ui.usdtTab.textContent = customNileUsdt ? '测试 USDT' : 'USDT';
   ui.usdtNotice.classList.toggle('hidden', !customNileUsdt);
+  const defaultAccount = DEFAULT_ACCOUNTS[state.network];
+  ui.pkHint.textContent = defaultAccount
+    ? `默认账户 ${defaultAccount.slice(0, 8)}…${defaultAccount.slice(-4)}，需输入该地址私钥；刷新即清除。`
+    : '仅保存在页面内存，刷新即清除。';
 }
 
 async function refreshBalances() {
@@ -503,6 +522,9 @@ ui.network.addEventListener('change', async () => {
       await refreshBalances();
       showError('已切换网络，余额与费用均为新网络数据，请先在测试网验证');
     }
+  } catch (e) {
+    ui.network.value = state.network;
+    showError(e.message);
   } finally {
     setBusy(false);
   }
