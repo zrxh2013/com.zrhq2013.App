@@ -1,12 +1,13 @@
 'use strict';
 
-const CACHE = 'tron-pwa-v1';
+const CACHE = 'tron-pwa-v2';
 
 const PRECACHE = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './vendor/buffer.global.js',
   './vendor/tronweb.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
