@@ -14,7 +14,7 @@ const EXPLORERS = {
 
 const USDT_CONTRACTS = {
   mainnet: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-  nile: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj',
+  nile: 'TS3EhDATvq7UG9cEQny4EczHWcdzavGndX',
 };
 
 const SUN = 1_000_000;
@@ -369,6 +369,9 @@ const ui = {
   address: $('address'),
   trxBalance: $('trxBalance'),
   usdtBalance: $('usdtBalance'),
+  usdtLabel: $('usdtLabel'),
+  usdtTab: $('usdtTab'),
+  usdtNotice: $('usdtNotice'),
   to: $('to'),
   amount: $('amount'),
   memo: $('memo'),
@@ -441,6 +444,10 @@ function syncButtons() {
       : '主网'
     : '未解锁';
   ui.netBadge.classList.toggle('live', state.unlocked);
+  const customNileUsdt = state.network === 'nile';
+  ui.usdtLabel.textContent = customNileUsdt ? '测试 USDT' : 'USDT';
+  ui.usdtTab.textContent = customNileUsdt ? '测试 USDT' : 'USDT';
+  ui.usdtNotice.classList.toggle('hidden', !customNileUsdt);
 }
 
 async function refreshBalances() {
@@ -592,7 +599,7 @@ ui.btnSend.addEventListener('click', async () => {
   }
   const netName = state.network === 'nile' ? 'Nile 测试网' : '主网';
   const ok = window.confirm(
-    `确认在【${netName}】发送\n\n类型：${p.type.toUpperCase()}\n收款：${p.to}\n金额：${
+    `确认在【${netName}】发送\n\n类型：${p.type === 'usdt' && state.network === 'nile' ? '自定义测试 USDT' : p.type.toUpperCase()}\n收款：${p.to}\n金额：${
       p.amount
     }\n备注：${p.memo || '无'}\n\n链上转账不可撤销，请核对地址。`
   );

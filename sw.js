@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'tron-pwa-v2';
+const CACHE = 'tron-pwa-v3';
 
 const PRECACHE = [
   './',

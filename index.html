@@ -54,7 +54,7 @@
           <strong id="trxBalance">—</strong>
         </div>
         <div class="balance">
-          <span>USDT</span>
+          <span id="usdtLabel">USDT</span>
           <strong id="usdtBalance">—</strong>
         </div>
       </div>
@@ -64,8 +64,9 @@
       <h2>转账</h2>
       <div class="tabs" role="tablist">
         <button class="tab active" data-type="trx" role="tab">TRX</button>
-        <button class="tab" data-type="usdt" role="tab">USDT</button>
+        <button id="usdtTab" class="tab" data-type="usdt" role="tab">USDT</button>
       </div>
+      <p id="usdtNotice" class="hint hidden">Nile 当前使用自定义测试 USDT（非官方 USDT）。</p>
 
       <div class="field">
         <label for="to">收款地址</label>
